@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="VcsDirectoryMappings">
+    <mapping directory="$PROJECT_DIR$" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/DeepSurv" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/auton-survival" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/autonsurv" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/stg" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/stg/python/auton-survival" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/stg/python/auton_survival" vcs="Git" />
+  </component>
+</project>
