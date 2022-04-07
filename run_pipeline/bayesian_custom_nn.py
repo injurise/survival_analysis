@@ -107,7 +107,7 @@ if __name__ == '__main__':
 
     #run model
 
-    args = arguments(200, 500, 200, 500, "train", 0.01, 0, "test_model_no_noise", "model_checkpoints")
+    args = arguments(200, 500, 200, 200, "train", 0.01, 0, "test_model_no_noise", "model_checkpoints")
 
     model = Bay_TestNet(2, 3, 1)
 
@@ -115,3 +115,6 @@ if __name__ == '__main__':
 
     run_custom_bnn(train_dataset,val_dataset,args,model,criterion)
 
+    inp = torch.tensor([[0.5, 0.5]], dtype=torch.float)
+
+    print(model(inp))

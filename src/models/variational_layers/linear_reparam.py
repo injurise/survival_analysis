@@ -9,6 +9,7 @@ from torch.nn import Module, Parameter
 from src.models.variational_layers.variational_layer import BaseVariationalLayer_
 
 
+
 class LinearReparam(BaseVariationalLayer_):
     def __init__(self,
                  in_features,
@@ -79,8 +80,12 @@ class LinearReparam(BaseVariationalLayer_):
         self.prior_weight_mu = torch.from_numpy(self.prior_means)
         self.prior_weight_sigma = torch.from_numpy(self.prior_variances)
 
-        self.mu_weight.data.normal_(mean=self.posterior_mu_init[0], std=0.1)
-        self.rho_weight.data.normal_(mean=self.posterior_rho_init[0], std=0.1)
+        for row in range(self.mu_weight.shape[0]):
+            self.mu_weight.detach()[row] = torch.normal(mean=torch.from_numpy(
+                self.posterior_mu_init[0][row]), std=0.1, generator=None, out=None)
+            self.rho_weight.detach()[row] = torch.normal(mean=torch.from_numpy(
+                self.posterior_rho_init[0][row]), std=0.1, generator=None, out=None)
+
         if self.mu_bias is not None:
             self.prior_bias_mu =torch.from_numpy(np.mean(self.prior_means,axis = 1))
             self.prior_bias_sigma = torch.from_numpy(np.mean(self.prior_variances,axis =1 ))

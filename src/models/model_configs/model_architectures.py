@@ -11,10 +11,10 @@ class Bay_TestNet(nn.Module):
         # self.tanh = nn.Tanh()
         self.l1 = LinearReparam(in_features=In_Nodes,
                                 out_features=Out_Nodes,
-                                prior_means=np.full((Out_Nodes ,In_Nodes) ,mean),
+                                prior_means=np.full((Out_Nodes,In_Nodes) ,mean),
                                 prior_variances=np.full((Out_Nodes ,In_Nodes) ,variance),
-                                posterior_mu_init=0.5,
-                                posterior_rho_init=-3.0,
+                                posterior_mu_init=np.full((Out_Nodes,In_Nodes) ,0.5),
+                                posterior_rho_init=np.full((Out_Nodes ,In_Nodes) ,-3.),
                                 bias=False,
                                 )
 
