@@ -11,6 +11,7 @@
         <option value="$MODULE_DIR$/DeepSurv" />
         <option value="$MODULE_DIR$/auton-survival" />
         <option value="$MODULE_DIR$/auton-survival/auton_survival/models" />
+        <option value="$MODULE_DIR$/CoxPASNet" />
       </list>
     </option>
   </component>

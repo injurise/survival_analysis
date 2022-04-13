@@ -2,7 +2,9 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/CoxPASNet" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/DeepSurv" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/Tutorial_BayesianCompressionForDL" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/auton-survival" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/stg" vcs="Git" />
   </component>

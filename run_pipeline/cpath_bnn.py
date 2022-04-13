@@ -167,7 +167,7 @@ if __name__ == '__main__':
 
     # run model
 
-    args = arguments(200, 84, 50, 10, "train", 0.01, 0, "test_model_cpath", "model_checkpoints")
+    args = arguments(200, 84, 50, 40, "train", 0.01, 0, "test_model_cpath", "model_checkpoints")
 
     model = Bay_CPathNet(5567, 100, 30, variance=200)
 
