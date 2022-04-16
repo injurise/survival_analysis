@@ -11,14 +11,17 @@ from torch.autograd import Variable
 from torch.nn.modules import utils
 from src.models.variational_layers.variational_layer import BaseVariationalLayer_
 
+
 class LinearReparam(BaseVariationalLayer_):
+    #Adjusted Linear Layer Class to make gaussian parameters flexibel per weight
+    # and to be able to initialise posterior
     def __init__(self,
                  in_features,
                  out_features,
                  prior_means,
                  prior_variances,
-                 posterior_mu_init=0,
-                 posterior_rho_init=-3.0,
+                 posterior_mu_init,
+                 posterior_rho_init,
                  bias=True):
         """
         Implements Linear layer with reparameterization trick.
@@ -93,7 +96,7 @@ class LinearReparam(BaseVariationalLayer_):
             self.mu_bias.data.normal_(mean=self.posterior_mu_init[0], std=0.1)
             self.rho_bias.data.normal_(mean=self.posterior_rho_init[0],
                                        std=0.1)
-    def kl_loss(self):
+    def kl_divergence(self):
         sigma_weight = torch.log1p(torch.exp(self.rho_weight))
         kl = self.kl_div(
             self.mu_weight,
@@ -161,27 +164,27 @@ def reparametrize(mu, logvar, cuda=False, sampling=True):
 # LINEAR LAYER
 # -------------------------------------------------------
 
-class LinearGroupNJ(Module):
+class LinearGroupNJ_Pathways(Module):
     """Fully Connected Group Normal-Jeffrey's layer (aka Group Variational Dropout).
-
     References:
     [1] Kingma, Diederik P., Tim Salimans, and Max Welling. "Variational dropout and the local reparameterization trick." NIPS (2015).
     [2] Molchanov, Dmitry, Arsenii Ashukha, and Dmitry Vetrov. "Variational Dropout Sparsifies Deep Neural Networks." ICML (2017).
     [3] Louizos, Christos, Karen Ullrich, and Max Welling. "Bayesian Compression for Deep Learning." NIPS (2017).
     """
 
-    def __init__(self, in_features, out_features, cuda=False, init_weight=None, init_bias=None, clip_var=None):
+    def __init__(self, in_features, out_features, mask,cuda=False, init_weight=None, init_bias=None, clip_var=None):
 
-        super(LinearGroupNJ, self).__init__()
+        super(LinearGroupNJ_Pathways, self).__init__()
         self.cuda = cuda
         self.in_features = in_features
         self.out_features = out_features
+        self.mask = mask
         self.clip_var = clip_var
         self.deterministic = False  # flag is used for compressed inference
         # trainable params according to Eq.(6)
         # dropout params
-        self.z_mu = Parameter(torch.Tensor(in_features))
-        self.z_logvar = Parameter(torch.Tensor(in_features))  # = z_mu^2 * alpha
+        self.z_mu = Parameter(torch.Tensor(out_features))
+        self.z_logvar = Parameter(torch.Tensor(out_features))  # = z_mu^2 * alpha
         # weight params
         self.weight_mu = Parameter(torch.Tensor(out_features, in_features))
         self.weight_logvar = Parameter(torch.Tensor(out_features, in_features))
@@ -209,6 +212,7 @@ class LinearGroupNJ(Module):
             self.weight_mu.data = torch.Tensor(init_weight)
         else:
             self.weight_mu.data.normal_(0, stdv)
+            self.weight_mu.data =  self.weight_mu* self.mask
 
         if init_bias is not None:
             self.bias_mu.data = torch.Tensor(init_bias)
@@ -230,6 +234,7 @@ class LinearGroupNJ(Module):
         return log_alpha
 
     def compute_posterior_params(self):
+        # not adjusted to new pathway groups yet!
         weight_var, z_var = self.weight_logvar.exp(), self.z_logvar.exp()
         self.post_weight_var = self.z_mu.pow(2) * weight_var + z_var * self.weight_mu.pow(2) + z_var * weight_var
         self.post_weight_mu = self.weight_mu * self.z_mu
@@ -241,6 +246,14 @@ class LinearGroupNJ(Module):
             return F.linear(x, self.post_weight_mu, self.bias_mu)
 
         batch_size = x.size()[0]
+
+        #Setting means to 0 according to pathways mask
+        mu_weights_path = self.weight_mu * self.mask
+        weight_mu_activations = F.linear(x,mu_weights_path,self.bias_mu)
+
+        logvar_weights_path = self.weight_logvar.exp() * self.mask
+        var_activations = F.linear(x.pow(2), logvar_weights_path,self.bias_logvar.exp()) # pow(2) comes from the local rep trick
+
         # compute z
         # note that we reparametrise according to [2] Eq. (11) (not [1])
         z = reparametrize(self.z_mu.repeat(batch_size, 1), self.z_logvar.repeat(batch_size, 1), sampling=self.training,
@@ -248,11 +261,8 @@ class LinearGroupNJ(Module):
 
         # apply local reparametrisation trick see [1] Eq. (6)
         # to the parametrisation given in [3] Eq. (6)
-        xz = x * z
-        mu_activations = F.linear(xz, self.weight_mu, self.bias_mu)
-        var_activations = F.linear(xz.pow(2), self.weight_logvar.exp(), self.bias_logvar.exp())
-
-        return reparametrize(mu_activations, var_activations.log(), sampling=self.training, cuda=self.cuda)
+        return reparametrize(weight_mu_activations *z , (var_activations * z.pow(2)).log(),
+                             sampling=self.training, cuda=self.cuda)
 
     def kl_divergence(self):
         # KL(q(z)||p(z))
@@ -263,7 +273,9 @@ class LinearGroupNJ(Module):
 
         # KL(q(w|z)||p(w|z))
         # we use the kl divergence given by [3] Eq.(8)
-        KLD_element = -0.5 * self.weight_logvar + 0.5 * (self.weight_logvar.exp() + self.weight_mu.pow(2)) - 0.5
+        KLD_element = (-0.5 * self.weight_logvar * self.mask +
+                      0.5 * (self.weight_logvar.exp() * self.mask +
+                               self.weight_mu.pow(2)*self.mask) - 0.5)
         KLD += torch.sum(KLD_element)
 
         # KL bias
@@ -276,3 +288,5 @@ class LinearGroupNJ(Module):
         return self.__class__.__name__ + ' (' \
                + str(self.in_features) + ' -> ' \
                + str(self.out_features) + ')'
+
+

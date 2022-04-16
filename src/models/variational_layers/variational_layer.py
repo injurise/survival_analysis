@@ -32,34 +32,3 @@ class BaseVariationalLayer_(nn.Module):
         return kl.mean()
 
 
-def bnn_linear_layer_cust(params, d):
-    # Get BNN layer
-    bnn_layer = LinearReparam(
-        in_features=d.in_features,
-        out_features=d.out_features,
-        prior_mean=params["prior_mu"],
-        prior_variance=params["prior_sigma"],
-        posterior_mu_init=params["posterior_mu_init"],
-        posterior_rho_init=params["posterior_rho_init"],
-        bias=d.bias is not None,
-    )
-    bnn_layer.dnn_to_bnn_flag = True
-    return bnn_layer
-
-
-def dnn_to_bnn_bcoxpas(m, bnn_prior_parameters):
-    for name, value in list(m._modules.items()):
-        if m._modules[name]._modules:
-            dnn_to_bnn_bcoxpas(m._modules[name], bnn_prior_parameters)
-        if name == "sc1":
-            pass
-        elif "Linear" in m._modules[name].__class__.__name__:
-            setattr(
-                m,
-                name,
-                bnn_linear_layer_cust(
-                    bnn_prior_parameters,
-                    m._modules[name]))
-        else:
-            pass
-    return
