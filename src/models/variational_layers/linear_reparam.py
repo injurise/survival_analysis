@@ -273,9 +273,7 @@ class LinearGroupNJ_Pathways(Module):
 
         # KL(q(w|z)||p(w|z))
         # we use the kl divergence given by [3] Eq.(8)
-        KLD_element = (-0.5 * self.weight_logvar * self.mask +
-                      0.5 * (self.weight_logvar.exp() * self.mask +
-                               self.weight_mu.pow(2)*self.mask) - 0.5)
+        KLD_element = self.mask * (-0.5 * self.weight_logvar + 0.5 * (self.weight_logvar.exp() + self.weight_mu.pow(2)) - 0.5)
         KLD += torch.sum(KLD_element)
 
         # KL bias

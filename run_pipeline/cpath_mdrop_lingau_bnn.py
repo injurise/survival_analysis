@@ -268,15 +268,27 @@ def main():
         # test()
         # visualizations
         val_score = validate(args, cpath_val_loader, model, epoch)
+    #torch.save(model.state_dict(), "model_checkpoints/test_save.pth")
+
 
 
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=5)
+    parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--num_mc', type=int, default=200)
-    parser.add_argument('--print_freq', type=int, default=5)
+    parser.add_argument('--print_freq', type=int, default=1)
 
     args = parser.parse_args()
     args.cuda = torch.cuda.is_available()  # check if we can put the net on the GPU
     main()
+
+
+
+### Next uo, implement test function and save model for inspection
+## Especially insepect if layers are working well and if for example the weights stay at 0 in the pathway mask
+## i.e. if the parameters of these weights stay unchanged - no gradient update
+# Also something might be wrong with the KL divergence, dont really get why the loss is negative
+# Given that the log liklihood is positive, that would mean that the KL.divergence is negative which makes no sense
+
+# probably run this somewhere in a jupyternotebook to check model gradients, I think KL divergence is fixed
