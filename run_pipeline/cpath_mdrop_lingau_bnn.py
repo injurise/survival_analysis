@@ -1,15 +1,19 @@
+import sys
+sys.path.append('/Users/alexandermollers/Documents/GitHub/survival_analysis')
+
 import numpy as np
 import torch
 from torch import nn
 import pandas as pd
-from src.models.bnn_cust_cpath import train_cpath_bnn,validate_cpath_model,evaluate_cpath_model
+#from src.models.bnn_cust_cpath import train_cpath_bnn,validate_cpath_model,evaluate_cpath_model
 from src.models.model_utils import AverageMeter,save_checkpoint
 from src.models.variational_layers.linear_reparam import LinearReparam, LinearGroupNJ_Pathways
 from src.data_prep.torch_datasets import cpath_dataset
 from src.models.loss_functions.loss_functions import partial_ll_loss
 from sksurv.metrics import concordance_index_censored
 from torch.autograd import Variable # decpreciated just used in the test method right now, so importing
-                                    # until reworked
+
+import os                              # until reworked
 import torch.optim as optim
 import time
 
@@ -25,16 +29,16 @@ class cpath_md_lg(nn.Module):
         self.fc1 = LinearGroupNJ_Pathways(In_Nodes, Pathway_Nodes,mask= mask, cuda=args.cuda)
         self.fc2 = LinearReparam(in_features=Pathway_Nodes,
                                 out_features=Hidden_Nodes,
-                                prior_means=np.full((Hidden_Nodes, Pathway_Nodes), 0),
-                                prior_variances=np.full((Hidden_Nodes, Pathway_Nodes), 0.01),
+                                prior_means=np.full((Hidden_Nodes, Pathway_Nodes), args.gp_mean),
+                                prior_variances=np.full((Hidden_Nodes, Pathway_Nodes), args.gp_var),
                                 posterior_mu_init=np.full((Hidden_Nodes, Pathway_Nodes), 0.5),
                                 posterior_rho_init=np.full((Hidden_Nodes, Pathway_Nodes), -3.),
                                 bias=False,
                                 )
         self.fc3 = LinearReparam(in_features=Hidden_Nodes,
                                 out_features=Last_layer_Nodes,
-                                prior_means=np.full((Last_layer_Nodes, Hidden_Nodes), 0),
-                                prior_variances=np.full((Last_layer_Nodes, Hidden_Nodes), 0.01),
+                                prior_means=np.full((Last_layer_Nodes, Hidden_Nodes), args.gp_mean),
+                                prior_variances=np.full((Last_layer_Nodes, Hidden_Nodes), args.gp_var),
                                 posterior_mu_init=np.full((Last_layer_Nodes, Hidden_Nodes), 0.5),
                                 posterior_rho_init=np.full((Last_layer_Nodes, Hidden_Nodes), -3.),
                                 bias=False,
@@ -42,8 +46,8 @@ class cpath_md_lg(nn.Module):
 
         self.fc4 = LinearReparam(in_features=Last_layer_Nodes + 1,
                                 out_features=1,
-                                prior_means=np.full((1, Last_layer_Nodes + 1), 0),
-                                prior_variances=np.full((1, Last_layer_Nodes + 1), 0.01),
+                                prior_means=np.full((1, Last_layer_Nodes + 1), args.gp_mean),
+                                prior_variances=np.full((1, Last_layer_Nodes + 1), args.gp_var),
                                 posterior_mu_init=np.full((1, Last_layer_Nodes + 1), 0.5),
                                 posterior_rho_init=np.full((1, Last_layer_Nodes + 1), -3.),
                                 bias=False
@@ -83,10 +87,17 @@ def train(args, model, train_data_loader, epoch, optimizer):
             # measure data loading time
             data_time.update(time.time() - end)
 
-            tb = target["tb"].cpu()
-            e = target["e"].cpu()
-            input_var = input["X"].cpu()
-            clinical_var = input["clinical_vars"].cpu()
+            if args.cuda:
+                tb = target["tb"].cuda()
+                e = target["e"].cuda()
+                input_var = input["X"].cuda()
+                clinical_var = input["clinical_vars"].cuda()
+
+            else:
+                tb = target["tb"].cpu()
+                e = target["e"].cpu()
+                input_var = input["X"].cpu()
+                clinical_var = input["clinical_vars"].cpu()
 
             output_ = []
             for mc_run in range(args.num_mc):
@@ -131,30 +142,63 @@ def train(args, model, train_data_loader, epoch, optimizer):
                     loss=losses,
                     plls=plls,
                     c_ind=c_indexs))
+            return losses.avg,c_indexs.avg
 
 
 def test(args,model,test_data_loader):
     ##Still has to be adjusted
     model.eval()
     test_loss = 0
-    correct = 0
-    for data, target in test_data_loader:
-        if args.cuda:
-            data, target = data.cuda(), target.cuda()
-        data, target = Variable(data, volatile=True), Variable(target)
-        output = model(data)
-        # commenting this out until test function has been reworked
-        #test_loss += discrimination_loss(output, target, size_average=False).data[0]
-        pred = output.data.max(1, keepdim=True)[1]
-        correct += pred.eq(target.data.view_as(pred)).cpu().sum()
-    test_loss /= len(test_data_loader.dataset)
-    print('Test loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)\n'.format(
-        test_loss, correct, len(test_data_loader.dataset),
-        100. * correct / len(test_data_loader.dataset)))
+    output_list = []
+    tb_list = []
+    e_list = []
+
+    model.eval()
+
+    with torch.no_grad():
+        for input, target in test_data_loader:
+
+            if args.cuda:
+                tb = target["tb"].cuda()
+                e = target["e"].cuda()
+                input_var = input["X"].cuda()
+                clinical_var = input["clinical_vars"].cuda()
+
+            else:
+                tb = target["tb"].cpu()
+                e = target["e"].cpu()
+                input_var = input["X"].cpu()
+                clinical_var = input["clinical_vars"].cpu()
+
+            # compute output
+            output_ = []
+            for mc_run in range(args.num_mc):
+                output = model(input_var, clinical_var)
+                output_.append(output)
+            output = torch.mean(torch.stack(output_), dim=0)
+            output_list.append(output)
+            tb_list.append(tb)
+            e_list.append(e)
+        output = torch.cat(output_list)
+        tb = torch.cat(tb_list)
+        e = torch.cat(e_list)
+
+        #error_metric = partial_ll_loss(output.reshape(-1), tb.reshape(-1), e.reshape(-1))
+        #scaled_error_metric = error_metric * (len(test_data_loader.dataset) / test_data_loader.batch_size)
+        #scaled_kl = model.kl_divergence() / test_data_loader.batch_size
+
+        # ELBO loss
+        #loss = error_metric + scaled_kl
+        conc_metric = concordance_index_censored(e.detach().numpy().astype(bool).reshape(-1),
+                                                     tb.detach().numpy().reshape(-1),
+                                                     output.reshape(-1).detach().numpy())[0]
+        return conc_metric
+
+
 
 
 # train the model and save some visualisations on the way
-def validate(args, cpath_val_loader, model, epoch, tb_writer=None):
+def validate(args, cpath_val_loader, model, tb_writer=None):
     batch_time = AverageMeter()
     losses = AverageMeter()
     errors = AverageMeter()
@@ -167,10 +211,17 @@ def validate(args, cpath_val_loader, model, epoch, tb_writer=None):
     with torch.no_grad():
         for i, (input, target) in enumerate(cpath_val_loader):
 
-            tb = target["tb"].cpu()
-            e = target["e"].cpu()
-            input_var = input["X"].cpu()
-            clinical_var = input["clinical_vars"].cpu()
+            if args.cuda:
+                tb = target["tb"].cuda()
+                e = target["e"].cuda()
+                input_var = input["X"].cuda()
+                clinical_var = input["clinical_vars"].cuda()
+
+            else:
+                tb = target["tb"].cpu()
+                e = target["e"].cpu()
+                input_var = input["X"].cpu()
+                clinical_var = input["clinical_vars"].cpu()
 
             # compute output
             output_ = []
@@ -216,9 +267,11 @@ def validate(args, cpath_val_loader, model, epoch, tb_writer=None):
 
     print(' * Error {error.avg:.3f}'.format(error=errors))
 
-    return errors.avg
+    return losses.avg,c_indexs.avg
 
 def main():
+    global best_cval_score
+
     pathway_mask = pd.read_csv("../data/pathway_mask.csv", index_col=0).values
     pathway_mask = torch.from_numpy(pathway_mask).type(torch.FloatTensor)
 
@@ -234,6 +287,12 @@ def main():
     e_val = val_data.loc[:, ["OS_EVENT"]].values
     clinical_vars_val = val_data.loc[:, ["AGE"]].values
 
+    test_data = pd.read_csv("../data/test.csv")
+    X_test_np = test_data.drop(["SAMPLE_ID", "OS_MONTHS", "OS_EVENT", "AGE"], axis=1).values
+    tb_test = test_data.loc[:, ["OS_MONTHS"]].values
+    e_test = test_data.loc[:, ["OS_EVENT"]].values
+    clinical_vars_test = test_data.loc[:, ["AGE"]].values
+
     cpath_train_dataset = cpath_dataset(X_train_np,
                                         clinical_vars_train,
                                         tb_train,
@@ -243,6 +302,10 @@ def main():
                                       clinical_vars_val,
                                       tb_val,
                                       e_val)
+    cpath_test_dataset = cpath_dataset(X_test_np,
+                                      clinical_vars_test,
+                                      tb_test,
+                                      e_test)
 
     # import data
     cpath_train_loader = torch.utils.data.DataLoader(cpath_train_dataset,
@@ -254,6 +317,10 @@ def main():
                                                    batch_size=len(cpath_val_dataset),
                                                    shuffle=False,
                                                    num_workers=0)
+    cpath_test_loader = torch.utils.data.DataLoader(cpath_test_dataset,
+                                                   batch_size=len(cpath_test_dataset),
+                                                   shuffle=False,
+                                                   num_workers=0)
 
 
     # init model
@@ -261,26 +328,75 @@ def main():
     if args.cuda:
         model.cuda()
         # init optimizer
-    optimizer = optim.Adam(model.parameters())
+    optimizer = optim.Adam(model.parameters(),lr=args.lr)
 
     for epoch in range(1, args.epochs + 1):
-        train(args, model, cpath_train_loader, epoch, optimizer)
+        loss_train_score, c_index_train_score = train(args, model, cpath_train_loader, epoch, optimizer)
         # test()
         # visualizations
-        val_score = validate(args, cpath_val_loader, model, epoch)
-    #torch.save(model.state_dict(), "model_checkpoints/test_save.pth")
+        loss_val_score,c_index_val_score = validate(args, cpath_val_loader, model, epoch)
+
+        is_best = c_index_val_score > best_cval_score
+        best_cval_score = max(c_index_val_score, best_cval_score)
+
+        if is_best:
+            save_checkpoint(
+                {
+                    'epoch': epoch + 1,
+                    'state_dict': model.state_dict(),
+                    'loss_train_score': loss_train_score,
+                    'ctrain_score': c_index_train_score,
+                    'cval_score': best_cval_score,
+                    'loss_val_score': loss_val_score,
+                },
+                is_best,
+                filename=os.path.join(
+                    args.save_dir,
+                    'bayesian_{}.pth'.format(args.arch)))
+
+    checkpoint_file = args.save_dir + '/bayesian_{}.pth'.format(
+        args.arch)
+    if args.cuda:
+        checkpoint = torch.load(checkpoint_file)
+    else:
+        checkpoint = torch.load(checkpoint_file,
+                                map_location=torch.device('cpu'))
+    model.load_state_dict(checkpoint['state_dict'])
+    checkpoint["test_conc_metric"] = test(args, model, cpath_test_loader)
+    save_checkpoint(checkpoint,is_best,
+        filename=os.path.join(
+            args.save_dir,
+            'bayesian_{}.pth'.format(args.arch)))
+
+    checkpoint.pop("state_dict", None)
+    checkpoint["lr"] = args.lr
+    checkpoint["gp_mean"] = args.gp_mean
+    checkpoint["gp_var"] = args.gp_var
+    checkpoint = {k: [v] for k, v in checkpoint.items()}
+
+    log_df = pd.DataFrame.from_dict(checkpoint, orient="columns")
+    log_path = os.path.join(args.log_dir,'logs.csv')
+    log_df.to_csv(log_path, mode='a', header=not os.path.exists(log_path))
+
 
 
 
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=100)
+    parser.add_argument('--epochs', type=int, default=2)
     parser.add_argument('--num_mc', type=int, default=200)
     parser.add_argument('--print_freq', type=int, default=1)
+    parser.add_argument('--lr', type=float, default=0.1)
+    parser.add_argument('--gp-mean', dest="gp_mean", type=float, default=0)
+    parser.add_argument('--gp-var', dest="gp_var", type=float, default=0.01)
+    parser.add_argument('--save-dir',dest="save_dir", type=str, default='/Users/alexandermollers/Documents/GitHub/survival_analysis/run_pipeline/model_checkpoints')
+    parser.add_argument('--arch',default='cpath_model')
+    parser.add_argument('--log-dir',dest = "log_dir", default='/Users/alexandermollers/Documents/GitHub/survival_analysis/run_pipeline/model_checkpoints')
 
     args = parser.parse_args()
-    args.cuda = torch.cuda.is_available()  # check if we can put the net on the GPU
+    args.cuda = torch.cuda.is_available() # check if we can put the net on the GPU
+    best_cval_score = 0
     main()
 
 
