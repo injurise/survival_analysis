@@ -1,3 +1,5 @@
+import sys
+sys.path.append('/cluster/home/amollers/Github/survival_analysis')
 import numpy as np
 import torch
 from torch import nn
@@ -271,6 +273,8 @@ def main():
 
     pathway_mask = pd.read_csv("../data/pathway_mask.csv", index_col=0).values
     pathway_mask = torch.from_numpy(pathway_mask).type(torch.FloatTensor)
+    if args.cuda:
+        pathway_mask=pathway_mask.to(device = 'cuda')
 
     train_data = pd.read_csv("../data/train.csv")
     X_train_np = train_data.drop(["SAMPLE_ID", "OS_MONTHS", "OS_EVENT", "AGE"], axis=1).values
