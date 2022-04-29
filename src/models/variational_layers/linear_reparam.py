@@ -176,11 +176,14 @@ class LinearGroupNJ_Pathways(Module):
 
         super(LinearGroupNJ_Pathways, self).__init__()
         self.cuda = cuda
+
+        if cuda:
+            device = "cuda"
+            self.mask =self.mask.cuda()
+
         self.in_features = in_features
         self.out_features = out_features
         self.mask = mask
-        if cuda:
-            self.mask =self.mask.cuda()
         self.clip_var = clip_var
         self.deterministic = False  # flag is used for compressed inference
         # trainable params according to Eq.(6)
@@ -188,7 +191,7 @@ class LinearGroupNJ_Pathways(Module):
         self.z_mu = Parameter(torch.Tensor(out_features))
         self.z_logvar = Parameter(torch.Tensor(out_features))  # = z_mu^2 * alpha
         # weight params
-        self.weight_mu = Parameter(torch.Tensor(out_features, in_features))
+        self.weight_mu = Parameter(torch.Tensor(out_features, in_features,device = device))
         self.weight_logvar = Parameter(torch.Tensor(out_features, in_features))
 
         self.bias_mu = Parameter(torch.Tensor(out_features))
@@ -203,6 +206,8 @@ class LinearGroupNJ_Pathways(Module):
 
         # numerical stability param
         self.epsilon = 1e-8
+
+
 
     def reset_parameters(self, init_weight, init_bias):
         # init means
