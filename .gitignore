@@ -2,7 +2,9 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
+#Logs
+logs/
+err_logs/
 # C extensions
 *.so
 
