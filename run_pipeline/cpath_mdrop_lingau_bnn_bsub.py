@@ -1,5 +1,6 @@
 import sys
 sys.path.append('/cluster/home/amollers/Github/survival_analysis')
+sys.path.append('/Users/alexandermollers/Documents/GitHub/survival_analysis')
 import numpy as np
 import torch
 from torch import nn
@@ -103,7 +104,7 @@ def train(args, model, train_data_loader, epoch, optimizer):
                 output = model(input_var, clinical_var)
                 output_.append(output)
             output = torch.mean(torch.stack(output_), dim=0)
-            loss_crit_metric = partial_ll_loss(output.reshape(-1), tb.reshape(-1), e.reshape(-1))
+            loss_crit_metric = partial_ll_loss(output.reshape(-1).cpu(), tb.reshape(-1).cpu(), e.reshape(-1).cpu())
             scaled_loss_crit_metric = loss_crit_metric * (len(train_data_loader.dataset) /train_data_loader.batch_size)
             scaled_kl = model.kl_divergence() / train_data_loader.batch_size
             loss = loss_crit_metric + scaled_kl
@@ -228,7 +229,7 @@ def validate(args, cpath_val_loader, model, tb_writer=None):
                 output = model(input_var, clinical_var)
                 output_.append(output)
             output = torch.mean(torch.stack(output_), dim=0)
-            error_metric = partial_ll_loss(output.reshape(-1), tb.reshape(-1), e.reshape(-1))
+            error_metric = partial_ll_loss(output.reshape(-1).cpu(), tb.reshape(-1).cpu(), e.reshape(-1).cpu())
             scaled_error_metric = error_metric * (len(cpath_val_loader.dataset) /cpath_val_loader.batch_size)
             scaled_kl = model.kl_divergence() / cpath_val_loader.batch_size
 
