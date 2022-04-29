@@ -190,14 +190,14 @@ class LinearGroupNJ_Pathways(Module):
         self.deterministic = False  # flag is used for compressed inference
         # trainable params according to Eq.(6)
         # dropout params
-        self.z_mu = Parameter(torch.empty(out_features,device = self.device))
-        self.z_logvar = Parameter(torch.empty(out_features,self.device))  # = z_mu^2 * alpha
+        self.z_mu = Parameter(torch.empty((1,out_features),device = self.device))
+        self.z_logvar = Parameter(torch.empty((1,out_features),device = self.device))  # = z_mu^2 * alpha
         # weight params
-        self.weight_mu = Parameter(torch.empty(out_features, in_features,device = self.device))
-        self.weight_logvar = Parameter(torch.empty(out_features, in_features,device = self.device))
+        self.weight_mu = Parameter(torch.empty((out_features, in_features),device = self.device))
+        self.weight_logvar = Parameter(torch.empty((out_features, in_features),device = self.device))
 
-        self.bias_mu = Parameter(torch.empty(out_features,self.device))
-        self.bias_logvar = Parameter(torch.empty(out_features,self.device))
+        self.bias_mu = Parameter(torch.empty((1,out_features),device = self.device))
+        self.bias_logvar = Parameter(torch.empty((1,out_features),device = self.device))
 
         # init params either random or with pretrained net
         self.reset_parameters(init_weight, init_bias)
