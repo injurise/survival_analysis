@@ -113,9 +113,9 @@ def train(args, model, train_data_loader, epoch, optimizer):
             loss.backward()
             optimizer.step()
 
-            conc_metric = concordance_index_censored(e.detach().numpy().astype(bool).reshape(-1),
-                                                     tb.detach().numpy().reshape(-1),
-                                                     output.reshape(-1).detach().numpy())[0]
+            conc_metric = concordance_index_censored(e.detach().cpu().numpy().astype(bool).reshape(-1),
+                                                     tb.detach().cpu().numpy().reshape(-1),
+                                                     output.reshape(-1).detach().cpu().numpy())[0]
             output = output.float()
             loss = loss.float()
             # measure accuracy and record loss
@@ -189,9 +189,9 @@ def test(args,model,test_data_loader):
 
         # ELBO loss
         #loss = error_metric + scaled_kl
-        conc_metric = concordance_index_censored(e.detach().numpy().astype(bool).reshape(-1),
-                                                     tb.detach().numpy().reshape(-1),
-                                                     output.reshape(-1).detach().numpy())[0]
+        conc_metric = concordance_index_censored(e.detach().cpu().numpy().astype(bool).reshape(-1),
+                                                     tb.detach().cpu().numpy().reshape(-1),
+                                                     output.reshape(-1).detach().cpu().numpy())[0]
         return conc_metric
 
 
@@ -236,9 +236,9 @@ def validate(args, cpath_val_loader, model, tb_writer=None):
             # ELBO loss
             loss = error_metric + scaled_kl
 
-            conc_metric = concordance_index_censored(e.detach().numpy().astype(bool).reshape(-1),
-                                                     tb.detach().numpy().reshape(-1),
-                                                     output.reshape(-1).detach().numpy())[0]
+            conc_metric = concordance_index_censored(e.detach().cpu().numpy().astype(bool).reshape(-1),
+                                                     tb.detach().cpu().numpy().reshape(-1),
+                                                     output.reshape(-1).detach().cpu().numpy())[0]
 
             output = output.float()
             loss = loss.float()
