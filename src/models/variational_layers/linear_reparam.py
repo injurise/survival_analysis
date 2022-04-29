@@ -214,6 +214,8 @@ class LinearGroupNJ_Pathways(Module):
             self.weight_mu.data = torch.Tensor(init_weight)
         else:
             self.weight_mu.data.normal_(0, stdv)
+            if self.cuda:
+                self.weight_mu = self.weight_mu.cuda()
             self.weight_mu.data =  self.weight_mu* self.mask
 
         if init_bias is not None:
