@@ -178,8 +178,10 @@ class LinearGroupNJ_Pathways(Module):
         self.cuda = cuda
         self.mask = mask
         if cuda:
-            device = "cuda"
+            self.device = "cuda"
             self.mask =self.mask.cuda()
+        else:
+            self.device = 'cpu'
 
         self.in_features = in_features
         self.out_features = out_features
@@ -188,14 +190,14 @@ class LinearGroupNJ_Pathways(Module):
         self.deterministic = False  # flag is used for compressed inference
         # trainable params according to Eq.(6)
         # dropout params
-        self.z_mu = Parameter(torch.Tensor(out_features))
-        self.z_logvar = Parameter(torch.Tensor(out_features))  # = z_mu^2 * alpha
+        self.z_mu = Parameter(torch.empty(out_features,device = self.device))
+        self.z_logvar = Parameter(torch.empty(out_features,self.device))  # = z_mu^2 * alpha
         # weight params
-        self.weight_mu = Parameter(torch.Tensor(out_features, in_features,device = device))
-        self.weight_logvar = Parameter(torch.Tensor(out_features, in_features))
+        self.weight_mu = Parameter(torch.empty(out_features, in_features,device = self.device))
+        self.weight_logvar = Parameter(torch.empty(out_features, in_features,device = self.device))
 
-        self.bias_mu = Parameter(torch.Tensor(out_features))
-        self.bias_logvar = Parameter(torch.Tensor(out_features))
+        self.bias_mu = Parameter(torch.empty(out_features,self.device))
+        self.bias_logvar = Parameter(torch.empty(out_features,self.device))
 
         # init params either random or with pretrained net
         self.reset_parameters(init_weight, init_bias)
