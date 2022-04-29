@@ -5,6 +5,7 @@ __pycache__/
 #Logs
 logs/
 err_logs/
+model_checkpoints/
 # C extensions
 *.so
 
