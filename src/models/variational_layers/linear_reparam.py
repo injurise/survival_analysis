@@ -213,12 +213,11 @@ class LinearGroupNJ_Pathways(Module):
         if init_weight is not None:
             self.weight_mu.data = torch.Tensor(init_weight)
         else:
+            self.weight_mu.data.normal_(0, stdv)
             if self.cuda:
-                self.weight_mu.data.normal_(0, stdv,device='gpu')
+                self.weight_mu.data = self.weight_mu * self.mask.cuda()
             else:
-                self.weight_mu.data.normal_(0, stdv)
-                
-            self.weight_mu.data =  self.weight_mu* self.mask
+                self.weight_mu.data =  self.weight_mu* self.mask
 
         if init_bias is not None:
             self.bias_mu.data = torch.Tensor(init_bias)
