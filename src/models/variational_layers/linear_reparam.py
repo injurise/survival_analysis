@@ -176,14 +176,14 @@ class LinearGroupNJ_Pathways(Module):
 
         super(LinearGroupNJ_Pathways, self).__init__()
         self.cuda = cuda
-
+        self.mask = mask
         if cuda:
             device = "cuda"
             self.mask =self.mask.cuda()
 
         self.in_features = in_features
         self.out_features = out_features
-        self.mask = mask
+
         self.clip_var = clip_var
         self.deterministic = False  # flag is used for compressed inference
         # trainable params according to Eq.(6)
