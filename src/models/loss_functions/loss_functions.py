@@ -3,7 +3,7 @@ import torch
 
 def partial_ll_loss(lrisks, tb, eb, eps=1e-3):
 
-    tb = tb + eps*np.random.random(len(tb))
+    #tb = tb + eps*np.random.random(len(tb))
     sindex = np.argsort(-tb)
 
     tb = tb[sindex]
