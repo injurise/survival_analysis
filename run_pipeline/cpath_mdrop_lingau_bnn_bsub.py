@@ -355,8 +355,8 @@ def main():
         log_path = os.path.join(args.log_dir, log_file_name)
         epoch_log_df.to_csv(log_path, mode='a', header=not os.path.exists(log_path))
 
-        return epoch_log_df.to_string(header=False, index=False)
-        
+    return epoch_log_df.to_string(header=False, index=False)
+
 
 
 
