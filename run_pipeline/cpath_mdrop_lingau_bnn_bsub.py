@@ -337,50 +337,27 @@ def main():
         # test()
         # visualizations
         loss_val_score,c_index_val_score = validate(args, cpath_val_loader, model, epoch)
+        test_conc_metric = test(args, model, cpath_test_loader)
+        epoch_log = {
+            'epoch': epoch + 1,
+            'lr':args.lr,
+            'gp_mean': args.gp_mean,
+            'gp_var': args.gp_var,
+            'loss_train_score': loss_train_score,
+            'ctrain_score': c_index_train_score,
+            'cval_score': best_cval_score,
+            'loss_val_score': loss_val_score,
+            'test_conc_metric':test_conc_metric
+        }
+        epoch_log = {k: [v] for k, v in epoch_log.items()}
+        epoch_log_df = pd.DataFrame.from_dict(epoch_log, orient="columns")
+        log_file_name = args.arch + '_logs.csv'
+        log_path = os.path.join(args.log_dir, log_file_name)
+        epoch_log_df.to_csv(log_path, mode='a', header=not os.path.exists(log_path))
 
-        is_best = c_index_val_score > best_cval_score
-        best_cval_score = max(c_index_val_score, best_cval_score)
+        return epoch_log_df.to_string(header=False, index=False)
+        
 
-        if is_best:
-            save_checkpoint(
-                {
-                    'epoch': epoch + 1,
-                    'state_dict': model.state_dict(),
-                    'loss_train_score': loss_train_score,
-                    'ctrain_score': c_index_train_score,
-                    'cval_score': best_cval_score,
-                    'loss_val_score': loss_val_score,
-                },
-                is_best,
-                filename=os.path.join(
-                    args.save_dir,
-                    'bayesian_{}.pth'.format(args.arch)))
-
-    checkpoint_file = args.save_dir + '/bayesian_{}.pth'.format(
-        args.arch)
-    if args.cuda:
-        checkpoint = torch.load(checkpoint_file)
-    else:
-        checkpoint = torch.load(checkpoint_file,
-                                map_location=torch.device('cpu'))
-    model.load_state_dict(checkpoint['state_dict'])
-    checkpoint["test_conc_metric"] = test(args, model, cpath_test_loader)
-    save_checkpoint(checkpoint,is_best,
-        filename=os.path.join(
-            args.save_dir,
-            'bayesian_{}.pth'.format(args.arch)))
-
-    checkpoint.pop("state_dict", None)
-    checkpoint["lr"] = args.lr
-    checkpoint["gp_mean"] = args.gp_mean
-    checkpoint["gp_var"] = args.gp_var
-    checkpoint = {k: [v] for k, v in checkpoint.items()}
-
-    log_df = pd.DataFrame.from_dict(checkpoint, orient="columns")
-    log_file_name = args.arch + '_logs.csv'
-    log_path = os.path.join(args.log_dir,log_file_name)
-    log_df.to_csv(log_path, mode='w')
-    return log_df.to_string(header=False, index=False)
 
 
 if __name__ == '__main__':
