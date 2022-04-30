@@ -345,7 +345,7 @@ def main():
             'gp_var': args.gp_var,
             'loss_train_score': loss_train_score,
             'ctrain_score': c_index_train_score,
-            'cval_score': best_cval_score,
+            'cval_score': c_index_val_score,
             'loss_val_score': loss_val_score,
             'test_conc_metric':test_conc_metric
         }
