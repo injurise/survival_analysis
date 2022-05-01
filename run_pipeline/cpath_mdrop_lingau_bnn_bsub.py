@@ -353,7 +353,7 @@ def main():
         epoch_log_df = pd.DataFrame.from_dict(epoch_log, orient="columns")
         log_file_name = args.arch + '_logs.csv'
         log_path = os.path.join(args.log_dir, log_file_name)
-        epoch_log_df.to_csv(log_path, mode='a', header=not os.path.exists(log_path))
+        epoch_log_df.to_csv(log_path, mode='a', header=not os.path.exists(log_path),index = False)
 
     return epoch_log_df.to_string(header=False, index=False)
 
