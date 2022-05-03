@@ -101,7 +101,7 @@ def train(args, model, train_data_loader, epoch, optimizer):
                 output = model(input_var, clinical_var)
                 output_.append(output)
             output = torch.mean(torch.stack(output_), dim=0)
-            loss_crit_metric = partial_ll_loss(output.reshape(-1), tb.reshape(-1), e.reshape(-1))
+            loss_crit_metric = partial_ll_loss(output.reshape(-1).cpu(), tb.reshape(-1).cpu(), e.reshape(-1).cpu())
             scaled_loss_crit_metric = loss_crit_metric * (len(train_data_loader.dataset) /train_data_loader.batch_size)
             scaled_kl = model.kl_divergence() / train_data_loader.batch_size
             loss = loss_crit_metric + scaled_kl
@@ -110,9 +110,9 @@ def train(args, model, train_data_loader, epoch, optimizer):
             loss.backward()
             optimizer.step()
 
-            conc_metric = concordance_index_censored(e.detach().numpy().astype(bool).reshape(-1),
-                                                     tb.detach().numpy().reshape(-1),
-                                                     output.reshape(-1).detach().numpy())[0]
+            conc_metric = concordance_index_censored(e.detach().cpu().numpy().astype(bool).reshape(-1),
+                                                     tb.detach().cpu().numpy().reshape(-1),
+                                                     output.reshape(-1).detach().cpu().numpy())[0]
             output = output.float()
             loss = loss.float()
             # measure accuracy and record loss
@@ -186,9 +186,9 @@ def test(args,model,test_data_loader):
 
         # ELBO loss
         #loss = error_metric + scaled_kl
-        conc_metric = concordance_index_censored(e.detach().numpy().astype(bool).reshape(-1),
-                                                     tb.detach().numpy().reshape(-1),
-                                                     output.reshape(-1).detach().numpy())[0]
+        conc_metric = concordance_index_censored(e.detach().cpu().numpy().astype(bool).reshape(-1),
+                                                     tb.detach().cpu().numpy().reshape(-1),
+                                                     output.reshape(-1).detach().cpu().numpy())[0]
         return conc_metric
 
 
@@ -226,16 +226,16 @@ def validate(args, cpath_val_loader, model, tb_writer=None):
                 output = model(input_var, clinical_var)
                 output_.append(output)
             output = torch.mean(torch.stack(output_), dim=0)
-            error_metric = partial_ll_loss(output.reshape(-1), tb.reshape(-1), e.reshape(-1))
+            error_metric = partial_ll_loss(output.reshape(-1).cpu(), tb.reshape(-1).cpu(), e.reshape(-1).cpu())
             scaled_error_metric = error_metric * (len(cpath_val_loader.dataset) /cpath_val_loader.batch_size)
             scaled_kl = model.kl_divergence() / cpath_val_loader.batch_size
 
             # ELBO loss
             loss = error_metric + scaled_kl
 
-            conc_metric = concordance_index_censored(e.detach().numpy().astype(bool).reshape(-1),
-                                                     tb.detach().numpy().reshape(-1),
-                                                     output.reshape(-1).detach().numpy())[0]
+            conc_metric = concordance_index_censored(e.detach().cpu().numpy().astype(bool).reshape(-1),
+                                                     tb.detach().cpu().numpy().reshape(-1),
+                                                     output.reshape(-1).detach().cpu().numpy())[0]
 
             output = output.float()
             loss = loss.float()
@@ -265,12 +265,14 @@ def validate(args, cpath_val_loader, model, tb_writer=None):
     print(' * Error {error.avg:.3f}'.format(error=errors))
 
     return losses.avg,c_indexs.avg
-
 def main():
+
     global best_cval_score
 
     pathway_mask = pd.read_csv("../data/pathway_mask.csv", index_col=0).values
     pathway_mask = torch.from_numpy(pathway_mask).type(torch.FloatTensor)
+    if args.cuda:
+        pathway_mask=pathway_mask.to(device = 'cuda')
 
     train_data = pd.read_csv("../data/train.csv")
     X_train_np = train_data.drop(["SAMPLE_ID", "OS_MONTHS", "OS_EVENT", "AGE"], axis=1).values
@@ -335,48 +337,33 @@ def main():
 
         is_best = c_index_val_score > best_cval_score
         best_cval_score = max(c_index_val_score, best_cval_score)
+        test_conc_metric = test(args, model, cpath_test_loader)
+
+        epoch_dict = {
+            'epoch': epoch + 1,
+            'lr': args.lr,
+            'gp_mean': args.gp_mean,
+            'gp_var': args.gp_var,
+            'loss_train_score': loss_train_score,
+            'ctrain_score': c_index_train_score,
+            'cval_score': c_index_val_score,
+            'loss_val_score': loss_val_score,
+            'test_conc_metric': test_conc_metric,
+            'state_dict': model.state_dict()
+        }
+        epoch_log = {k: [v] for k, v in epoch_dict.pop("state_dict", None).items()}
+        epoch_log_df = pd.DataFrame.from_dict(epoch_log, orient="columns")
+        log_file_name = args.arch + '_logs.csv'
+        log_path = os.path.join(args.log_dir, log_file_name)
+        epoch_log_df.to_csv(log_path, mode='a', header=not os.path.exists(log_path), index=False)
 
         if is_best:
             save_checkpoint(
-                {
-                    'epoch': epoch + 1,
-                    'state_dict': model.state_dict(),
-                    'loss_train_score': loss_train_score,
-                    'ctrain_score': c_index_train_score,
-                    'cval_score': best_cval_score,
-                    'loss_val_score': loss_val_score,
-                },
+                epoch_dict,
                 is_best,
                 filename=os.path.join(
                     args.save_dir,
                     'bayesian_{}.pth'.format(args.arch)))
-
-    checkpoint_file = args.save_dir + '/bayesian_{}.pth'.format(
-        args.arch)
-    if args.cuda:
-        checkpoint = torch.load(checkpoint_file)
-    else:
-        checkpoint = torch.load(checkpoint_file,
-                                map_location=torch.device('cpu'))
-    model.load_state_dict(checkpoint['state_dict'])
-    checkpoint["test_conc_metric"] = test(args, model, cpath_test_loader)
-    save_checkpoint(checkpoint,is_best,
-        filename=os.path.join(
-            args.save_dir,
-            'bayesian_{}.pth'.format(args.arch)))
-
-    checkpoint.pop("state_dict", None)
-    checkpoint["lr"] = args.lr
-    checkpoint["gp_mean"] = args.gp_mean
-    checkpoint["gp_var"] = args.gp_var
-    checkpoint = {k: [v] for k, v in checkpoint.items()}
-
-    log_df = pd.DataFrame.from_dict(checkpoint, orient="columns")
-    log_path = os.path.join(args.log_dir,'logs.csv')
-    log_df.to_csv(log_path, mode='a', header=not os.path.exists(log_path))
-
-
-
 
 if __name__ == '__main__':
     import argparse
