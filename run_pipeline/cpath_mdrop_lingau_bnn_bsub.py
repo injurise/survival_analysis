@@ -380,18 +380,20 @@ def main():
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=2)
+    parser.add_argument('--epochs', type=int, default=1)
     parser.add_argument('--num-mc',dest = "num_mc", type=int, default=200)
     parser.add_argument('--print_freq', type=int, default=1)
     parser.add_argument('--lr', type=float, default=0.1)
     parser.add_argument('--gp-mean', dest="gp_mean", type=float, default=0)
     parser.add_argument('--gp-var', dest="gp_var", type=float, default=0.01)
-    parser.add_argument('--save-best-model', dest = "save_best_model", default=False)
+    parser.add_argument('--save-best-model', dest = "save_best_model",choices=('True','False'), default='True')
     parser.add_argument('--save-dir',dest="save_dir", type=str, default='/Users/alexandermollers/Documents/GitHub/survival_analysis/run_pipeline/model_checkpoints')
     parser.add_argument('--arch',default='cpath_model')
     parser.add_argument('--log-dir',dest = "log_dir", default='/Users/alexandermollers/Documents/GitHub/survival_analysis/run_pipeline/model_checkpoints')
 
     args = parser.parse_args()
+    model_bool = args.save_best_model == 'True'
+    args.save_best_model = model_bool
     args.cuda = torch.cuda.is_available() # check if we can put the net on the GPU
     best_cval_score = 0
     main()
