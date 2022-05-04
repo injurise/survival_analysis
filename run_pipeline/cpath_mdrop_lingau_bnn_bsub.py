@@ -107,7 +107,7 @@ def train(args, model, train_data_loader, epoch, optimizer):
             loss_crit_metric = partial_ll_loss(output.reshape(-1).cpu(), tb.reshape(-1).cpu(), e.reshape(-1).cpu())
             scaled_loss_crit_metric = loss_crit_metric * (len(train_data_loader.dataset) /train_data_loader.batch_size)
             scaled_kl = model.kl_divergence() / train_data_loader.batch_size
-            loss = loss_crit_metric + scaled_kl
+            loss = scaled_loss_crit_metric + scaled_kl
 
             optimizer.zero_grad()
             loss.backward()
@@ -119,9 +119,9 @@ def train(args, model, train_data_loader, epoch, optimizer):
             output = output.float()
             loss = loss.float()
             # measure accuracy and record loss
-            losses.update(loss.item(), input["X"].size(0))
-            plls.update(scaled_loss_crit_metric.item(), input["X"].size(0))
-            c_indexs.update(conc_metric, input["X"].size(0))
+            losses.update(loss.item())
+            plls.update(scaled_loss_crit_metric.item())
+            c_indexs.update(conc_metric)
 
             # measure elapsed time
             batch_time.update(time.time() - end)
@@ -142,7 +142,8 @@ def train(args, model, train_data_loader, epoch, optimizer):
                     loss=losses,
                     plls=plls,
                     c_ind=c_indexs))
-            return losses.avg,c_indexs.avg
+
+            return losses.sum,c_indexs.avg,plls.sum
 
 
 def test(args,model,test_data_loader):
@@ -183,7 +184,7 @@ def test(args,model,test_data_loader):
         tb = torch.cat(tb_list)
         e = torch.cat(e_list)
 
-        #error_metric = partial_ll_loss(output.reshape(-1), tb.reshape(-1), e.reshape(-1))
+        pll= partial_ll_loss(output.reshape(-1).cpu(), tb.reshape(-1).cpu(), e.reshape(-1).cpu())
         #scaled_error_metric = error_metric * (len(test_data_loader.dataset) / test_data_loader.batch_size)
         #scaled_kl = model.kl_divergence() / test_data_loader.batch_size
 
@@ -192,7 +193,7 @@ def test(args,model,test_data_loader):
         conc_metric = concordance_index_censored(e.detach().cpu().numpy().astype(bool).reshape(-1),
                                                      tb.detach().cpu().numpy().reshape(-1),
                                                      output.reshape(-1).detach().cpu().numpy())[0]
-        return conc_metric
+        return conc_metric,pll.item()
 
 
 
@@ -234,7 +235,7 @@ def validate(args, cpath_val_loader, model, tb_writer=None):
             scaled_kl = model.kl_divergence() / cpath_val_loader.batch_size
 
             # ELBO loss
-            loss = error_metric + scaled_kl
+            loss = scaled_error_metric + scaled_kl
 
             conc_metric = concordance_index_censored(e.detach().cpu().numpy().astype(bool).reshape(-1),
                                                      tb.detach().cpu().numpy().reshape(-1),
@@ -244,9 +245,9 @@ def validate(args, cpath_val_loader, model, tb_writer=None):
             loss = loss.float()
 
             # measure accuracy and record loss
-            losses.update(loss.item(), input["X"].size(0))
-            errors.update(scaled_error_metric.item(), input["X"].size(0))
-            c_indexs.update(conc_metric, input["X"].size(0))
+            losses.update(loss.item())
+            errors.update(scaled_error_metric.item())
+            c_indexs.update(conc_metric)
 
             # measure elapsed time
             batch_time.update(time.time() - end)
@@ -267,7 +268,8 @@ def validate(args, cpath_val_loader, model, tb_writer=None):
 
     print(' * Error {error.avg:.3f}'.format(error=errors))
 
-    return losses.avg,c_indexs.avg
+    return losses.sum,c_indexs.avg,errors.sum
+
 
 def main():
     global best_cval_score
@@ -333,23 +335,38 @@ def main():
     optimizer = optim.Adam(model.parameters(),lr=args.lr)
 
     for epoch in range(1, args.epochs + 1):
-        loss_train_score, c_index_train_score = train(args, model, cpath_train_loader, epoch, optimizer)
-        # test()
-        # visualizations
-        loss_val_score,c_index_val_score = validate(args, cpath_val_loader, model, epoch)
-        test_conc_metric = test(args, model, cpath_test_loader)
-        epoch_log = {
+        loss_train_score, c_index_train_score,pll_train = train(args, model, cpath_train_loader, epoch, optimizer)
+        loss_val_score,c_index_val_score,pll_val = validate(args, cpath_val_loader, model, epoch)
+        test_conc_metric,test_pll = test(args, model, cpath_test_loader)
+
+        epoch_dict = {
+
             'epoch': epoch + 1,
-            'lr':args.lr,
+            'lr': args.lr,
             'gp_mean': args.gp_mean,
             'gp_var': args.gp_var,
             'loss_train_score': loss_train_score,
+            'train_pll': pll_train,
             'ctrain_score': c_index_train_score,
             'cval_score': c_index_val_score,
             'loss_val_score': loss_val_score,
-            'test_conc_metric':test_conc_metric
+            'val_pll': pll_val,
+            'test_conc_metric': test_conc_metric,
+            'test_pll': test_pll,
+            'state_dict': model.state_dict()
         }
-        epoch_log = {k: [v] for k, v in epoch_log.items()}
+        is_best = c_index_val_score > best_cval_score
+        best_cval_score = max(c_index_val_score, best_cval_score)
+        if args.save_best_model & is_best:
+                save_checkpoint(
+                    epoch_dict,
+                    is_best,
+                    filename=os.path.join(
+                        args.save_dir,
+                        'bayesian_{}.pth'.format(args.arch)))
+
+        epoch_dict.pop("state_dict", None)
+        epoch_log = {k: [v] for k, v in epoch_dict.items()}
         epoch_log_df = pd.DataFrame.from_dict(epoch_log, orient="columns")
         log_file_name = args.arch + '_logs.csv'
         log_path = os.path.join(args.log_dir, log_file_name)
@@ -363,12 +380,13 @@ def main():
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=1)
+    parser.add_argument('--epochs', type=int, default=2)
     parser.add_argument('--num-mc',dest = "num_mc", type=int, default=200)
     parser.add_argument('--print_freq', type=int, default=1)
     parser.add_argument('--lr', type=float, default=0.1)
     parser.add_argument('--gp-mean', dest="gp_mean", type=float, default=0)
     parser.add_argument('--gp-var', dest="gp_var", type=float, default=0.01)
+    parser.add_argument('--save-best-model', dest = "save_best_model", default=False)
     parser.add_argument('--save-dir',dest="save_dir", type=str, default='/Users/alexandermollers/Documents/GitHub/survival_analysis/run_pipeline/model_checkpoints')
     parser.add_argument('--arch',default='cpath_model')
     parser.add_argument('--log-dir',dest = "log_dir", default='/Users/alexandermollers/Documents/GitHub/survival_analysis/run_pipeline/model_checkpoints')
@@ -379,11 +397,3 @@ if __name__ == '__main__':
     main()
 
 
-
-### Next uo, implement test function and save model for inspection
-## Especially insepect if layers are working well and if for example the weights stay at 0 in the pathway mask
-## i.e. if the parameters of these weights stay unchanged - no gradient update
-# Also something might be wrong with the KL divergence, dont really get why the loss is negative
-# Given that the log liklihood is positive, that would mean that the KL.divergence is negative which makes no sense
-
-# probably run this somewhere in a jupyternotebook to check model gradients, I think KL divergence is fixed
