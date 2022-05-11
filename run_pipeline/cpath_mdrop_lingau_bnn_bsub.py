@@ -272,7 +272,7 @@ def validate(args, cpath_val_loader, model, tb_writer=None):
 
 
 def main():
-    global best_cval_score
+    global best_loss_val_score
 
     pathway_mask = pd.read_csv("../data/pathway_mask.csv", index_col=0).values
     pathway_mask = torch.from_numpy(pathway_mask).type(torch.FloatTensor)
@@ -355,8 +355,8 @@ def main():
             'test_pll': test_pll,
             'state_dict': model.state_dict()
         }
-        is_best = c_index_val_score > best_cval_score
-        best_cval_score = max(c_index_val_score, best_cval_score)
+        is_best = loss_val_score < best_loss_val_score
+        best_loss_val_score = min(loss_val_score, best_loss_val_score)
         if args.save_best_model & is_best:
                 save_checkpoint(
                     epoch_dict,
@@ -395,7 +395,7 @@ if __name__ == '__main__':
     model_bool = args.save_best_model == 'True'
     args.save_best_model = model_bool
     args.cuda = torch.cuda.is_available() # check if we can put the net on the GPU
-    best_cval_score = 0
+    best_loss_val_score = 0
     main()
 
 
