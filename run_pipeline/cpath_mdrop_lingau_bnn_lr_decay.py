@@ -129,7 +129,7 @@ def main():
         model.cuda()
         # init optimizer
     optimizer = optim.Adam(model.parameters(),lr=args.lr)
-    lmbda = lambda epoch: 0.98 ** epoch
+    lmbda = lambda epoch: 0.99 ** epoch
     scheduler = torch.optim.lr_scheduler.MultiplicativeLR(optimizer, lr_lambda=lmbda)
 
     for epoch in range(1, args.epochs + 1):
