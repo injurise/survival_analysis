@@ -130,7 +130,7 @@ def main():
         # init optimizer
     optimizer = optim.Adam(model.parameters(),lr=args.lr)
     lmbda = lambda epoch: 0.995 ** epoch
-    scheduler = torch.optim.lr_scheduler.MultiplicativeLR(optimizer, lr_lambda=lmbda)
+    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lmbda)
 
     for epoch in range(1, args.epochs + 1):
         loss_train_score, c_index_train_score,pll_train = train(args, model, cpath_train_loader, epoch, optimizer)
@@ -140,7 +140,7 @@ def main():
         epoch_dict = {
 
             'epoch': epoch + 1,
-            'lr': args.lr,
+            'lr': optimizer.param_groups[0]["lr"],
             'gp_mean': args.gp_mean,
             'gp_var': args.gp_var,
             'loss_train_score': loss_train_score,
@@ -179,7 +179,7 @@ def main():
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=1)
+    parser.add_argument('--epochs', type=int, default=2)
     parser.add_argument('--num-mc',dest = "num_mc", type=int, default=200)
     parser.add_argument('--print_freq', type=int, default=1)
     parser.add_argument('--lr', type=float, default=0.1)
