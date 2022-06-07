@@ -105,8 +105,8 @@ def train(args, model, train_data_loader, epoch, optimizer):
                 output_.append(output)
             output = torch.mean(torch.stack(output_), dim=0)
             loss_crit_metric = partial_ll_loss(output.reshape(-1).cpu(), tb.reshape(-1).cpu(), e.reshape(-1).cpu())
-            scaled_loss_crit_metric = loss_crit_metric * (len(train_data_loader.dataset) /train_data_loader.batch_size)
-            scaled_kl = model.kl_divergence() / train_data_loader.batch_size
+            scaled_loss_crit_metric = loss_crit_metric * (len(train_data_loader.dataset) /train_data_loader.batch_size) # this might be the other way round
+            scaled_kl = model.kl_divergence() / train_data_loader.batch_size # should these things be batchsize / dataset?
             loss = scaled_loss_crit_metric + scaled_kl
 
             optimizer.zero_grad()
