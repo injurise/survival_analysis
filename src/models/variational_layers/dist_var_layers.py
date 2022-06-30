@@ -32,8 +32,10 @@ class ReparametrizedGaussian(Distribution):
     def std_dev(self):
         return torch.log1p(torch.exp(self.rho)) * self.mask
 
-    def sample(self, n_samples=1):
+    def sample(self, cuda, n_samples=1):
         epsilon = torch.distributions.Normal(0, 1).sample(sample_shape=(n_samples, *self.mean.size()))
+        if cuda:
+            epsilon = epsilon.cuda()
         return self.mean + self.std_dev * epsilon
 
     def logprob(self, target):
@@ -52,7 +54,7 @@ class ReparametrizedGaussian(Distribution):
         else:
             n_inputs = len(self.mean)
             n_outputs = 1
-
+        # part 1 should be adjusted to nonzero entries instead of (n_inputs * n_outputs) otherwise doesnt work with mask
         part1 = (n_inputs * n_outputs) / 2 * (torch.log(torch.tensor([2 * math.pi])) + 1)
         nonzero_index = self.std_dev!=0
         part2 = self.std_dev
