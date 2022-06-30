@@ -69,12 +69,15 @@ class HorseshoeLayer_out_mask(nn.Module):
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
+        self.cuda = cuda
 
         if mask == None:
             self.mask = torch.ones(out_features,in_features)
         else:
             self.mask = mask
-        self.cuda = cuda
+
+        if self.cuda:
+            self.mask = self.mask.cuda()
 
         # Scale to initialize weights, according to Yingzhen's work
         if parameters.horseshoe_scale == None:
