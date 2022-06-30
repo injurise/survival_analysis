@@ -24,8 +24,8 @@ class ReparametrizedGaussian(Distribution):
         self.mask = mask
         if self.mask == None:
             self.mask = torch.ones(*self.mean.size())
-            if self.rho.is_cuda:
-                self.mask = self.mask.cuda()
+        if self.rho.is_cuda:
+            self.mask = self.mask.cuda()
         self.mean = self.mean
         self.normal = torch.distributions.Normal(0, 1)
         self.point_estimate = self.mean
