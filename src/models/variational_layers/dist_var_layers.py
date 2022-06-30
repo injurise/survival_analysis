@@ -32,7 +32,7 @@ class ReparametrizedGaussian(Distribution):
     def std_dev(self):
         return torch.log1p(torch.exp(self.rho)) * self.mask
 
-    def sample(self, cuda, n_samples=1):
+    def sample(self, cuda = False, n_samples=1):
         epsilon = torch.distributions.Normal(0, 1).sample(sample_shape=(n_samples, *self.mean.size()))
         if cuda:
             epsilon = epsilon.cuda()

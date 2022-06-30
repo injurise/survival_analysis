@@ -286,7 +286,7 @@ class HorseshoeLayer_out_mask(nn.Module):
             sample: bool, whether to samples weights and bias
             n_samples: int, number of samples to draw from the weight and bias distribution
         """
-        beta = self.beta.sample(n_samples)
+        beta = self.beta.sample(cuda = self.cuda,n_samples = n_samples)
         log_tau = torch.unsqueeze(self.log_tau.sample(n_samples), 2)
         log_v = torch.unsqueeze(self.log_v.sample(n_samples), 1)
         mask = torch.unsqueeze(self.mask, 0)
