@@ -76,9 +76,6 @@ class HorseshoeLayer_out_mask(nn.Module):
         else:
             self.mask = mask
 
-        if self.cuda:
-            self.mask = self.mask.cuda()
-
         # Scale to initialize weights, according to Yingzhen's work
         if parameters.horseshoe_scale == None:
             scale = 1. * np.sqrt(6. / (in_features + out_features))
@@ -100,8 +97,16 @@ class HorseshoeLayer_out_mask(nn.Module):
 
         # Initialization of parameters of variational distribution
         # weight parameters
-        self.beta_mean = nn.Parameter(torch.Tensor(out_features, in_features).uniform_(-scale, scale) * self.mask)
-        self.beta_rho = nn.Parameter(torch.ones([out_features, in_features]) * parameters.beta_rho_scale * self.mask)
+        beta_mean_init = torch.Tensor(out_features, in_features).uniform_(-scale, scale)
+        beta_rho_init = torch.ones([out_features, in_features]) * parameters.beta_rho_scale
+
+        if self.cuda:
+            self.mask = self.mask.cuda()
+            beta_mean_init = beta_mean_init.cuda()
+            beta_rho_init = beta_rho_init.cuda()
+
+        self.beta_mean = nn.Parameter(beta_mean_init * self.mask)
+        self.beta_rho = nn.Parameter(beta_rho_init * self.mask)
         self.beta = ReparametrizedGaussian(self.beta_mean, self.beta_rho,self.mask)
 
         # local shrinkage parameters
