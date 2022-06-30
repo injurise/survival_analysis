@@ -32,6 +32,8 @@ class ReparametrizedGaussian(Distribution):
 
     @property
     def std_dev(self):
+        if self.rho.is_cuda:
+            self.mask = self.mask.cuda()
         return torch.log1p(torch.exp(self.rho)) * self.mask
 
     def sample(self, n_samples=1):
