@@ -24,6 +24,8 @@ class ReparametrizedGaussian(Distribution):
         self.mask = mask
         if self.mask == None:
             self.mask = torch.ones(*self.mean.size())
+            if self.rho.is_cuda:
+                self.mask = self.mask.cuda()
         self.mean = self.mean
         self.normal = torch.distributions.Normal(0, 1)
         self.point_estimate = self.mean
@@ -32,9 +34,9 @@ class ReparametrizedGaussian(Distribution):
     def std_dev(self):
         return torch.log1p(torch.exp(self.rho)) * self.mask
 
-    def sample(self, cuda = False, n_samples=1):
+    def sample(self, n_samples=1):
         epsilon = torch.distributions.Normal(0, 1).sample(sample_shape=(n_samples, *self.mean.size()))
-        if cuda:
+        if self.std_dev.is_cuda:
             epsilon = epsilon.cuda()
         return self.mean + self.std_dev * epsilon
 
