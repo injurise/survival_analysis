@@ -18,15 +18,19 @@ class ReparametrizedGaussian(Distribution):
     shifting the samples by the mean and scaling by the standard deviation:
     w = mu + log(1 + exp(rho)) * epsilon
     """
-    def __init__(self, mu, rho):
+    def __init__(self, mu, rho,mask = None):
         self.mean = mu
         self.rho = rho
+        self.mask = mask
+        if self.mask == None:
+            self.mask = torch.ones(*self.mean.size())
+        self.mean = self.mean
         self.normal = torch.distributions.Normal(0, 1)
         self.point_estimate = self.mean
 
     @property
     def std_dev(self):
-        return torch.log1p(torch.exp(self.rho))
+        return torch.log1p(torch.exp(self.rho)) * self.mask
 
     def sample(self, n_samples=1):
         epsilon = torch.distributions.Normal(0, 1).sample(sample_shape=(n_samples, *self.mean.size()))
@@ -50,7 +54,10 @@ class ReparametrizedGaussian(Distribution):
             n_outputs = 1
 
         part1 = (n_inputs * n_outputs) / 2 * (torch.log(torch.tensor([2 * math.pi])) + 1)
-        part2 = torch.sum(torch.log(self.std_dev))
+        nonzero_index = self.std_dev!=0
+        part2 = self.std_dev
+        part2[nonzero_index] = torch.log(self.std_dev[nonzero_index])
+        part2 = torch.sum(part2)
 
         return part1 + part2
 

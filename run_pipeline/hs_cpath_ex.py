@@ -9,10 +9,11 @@ import pandas as pd
 from src.models.model_utils import AverageMeter,save_checkpoint
 from src.models.variational_layers.linear_reparam import LinearReparam, LinearGroupNJ_Pathways
 from src.data_prep.torch_datasets import cpath_dataset
+from src.data_prep.load_data import load_cpath_data
 from src.models.loss_functions.loss_functions import partial_ll_loss
 from sksurv.metrics import concordance_index_censored
-
 from torch.autograd import Variable # decpreciated just used in the test method right now, so importing
+from src.models.variational_layers.variational_layer import HorseshoeLayer_out_mask
 
 import os                              # until reworked
 import torch.optim as optim
@@ -21,13 +22,29 @@ import time
 
 ############# Model Definition ##################
 
-class cpath_md_lg(nn.Module):
+class Horseshoe_params:
+    def __init__(self):
+        self.horseshoe_scale = None
+        self.global_cauchy_scale = 1.
+        self.weight_cauchy_scale = 1
+        self.beta_rho_scale = -5.
+        self.log_tau_mean = None
+        self.log_tau_rho_scale = -5.
+        self.bias_rho_scale = -5.
+        self.log_v_mean = None
+        self.log_v_rho_scale = -5.
+
+hs_parameters = Horseshoe_params()
+
+
+class hs_cpath(nn.Module):
     def __init__(self, In_Nodes, Pathway_Nodes, Hidden_Nodes,Last_layer_Nodes, args,mask):
-        super(cpath_md_lg, self).__init__()
+        super(hs_cpath, self).__init__()
         # activation
         self.tanh = nn.Tanh()
         # layers
-        self.fc1 = LinearGroupNJ_Pathways(In_Nodes, Pathway_Nodes,mask= mask, cuda=args.cuda)
+        self.fc1 = HorseshoeLayer_out_mask(In_Nodes, Pathway_Nodes, hs_parameters, mask=mask)
+
         self.fc2 = LinearReparam(in_features=Pathway_Nodes,
                                 out_features=Hidden_Nodes,
                                 prior_means=np.full((Hidden_Nodes, Pathway_Nodes), args.gp_mean),
@@ -59,7 +76,7 @@ class cpath_md_lg(nn.Module):
 
     def forward(self, x, clinical_vars):
         x = self.tanh(self.fc1(x))
-        x = self.tanh(self.fc2(x,return_kl = False))
+        x = self.tanh(self.fc2(x.squeeze(0),return_kl = False))
         x = self.tanh(self.fc3(x,return_kl = False))
         x_cat = torch.cat((x, clinical_vars), 1)
         lin_pred = self.fc4(x_cat,return_kl = False)
@@ -106,13 +123,16 @@ def train(args, model, train_data_loader, epoch, optimizer):
                 output_.append(output)
             output = torch.mean(torch.stack(output_), dim=0)
             loss_crit_metric = partial_ll_loss(output.reshape(-1).cpu(), tb.reshape(-1).cpu(), e.reshape(-1).cpu())
-            scaled_loss_crit_metric = loss_crit_metric * (len(train_data_loader.dataset) /train_data_loader.batch_size) # this might be the other way round
-            scaled_kl = model.kl_divergence() / train_data_loader.batch_size # should these things be batchsize / dataset?
+            scaled_loss_crit_metric = loss_crit_metric * (len(
+                train_data_loader.dataset) / train_data_loader.batch_size)  # this might be the other way round
+            scaled_kl = model.kl_divergence() / train_data_loader.batch_size  # should these things be batchsize / dataset?
             loss = scaled_loss_crit_metric + scaled_kl
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+
+            model.fc1.analytic_update()
 
             conc_metric = concordance_index_censored(e.detach().cpu().numpy().astype(bool).reshape(-1),
                                                      tb.detach().cpu().numpy().reshape(-1),
@@ -144,10 +164,10 @@ def train(args, model, train_data_loader, epoch, optimizer):
                     plls=plls,
                     c_ind=c_indexs))
 
-            return losses.sum,c_indexs.avg,plls.sum
+            return losses.sum, c_indexs.avg, plls.sum
 
 
-def test(args,model,test_data_loader):
+def test(args, model, test_data_loader):
     ##Still has to be adjusted
     model.eval()
     test_loss = 0
@@ -185,18 +205,16 @@ def test(args,model,test_data_loader):
         tb = torch.cat(tb_list)
         e = torch.cat(e_list)
 
-        pll= partial_ll_loss(output.reshape(-1).cpu(), tb.reshape(-1).cpu(), e.reshape(-1).cpu())
-        #scaled_error_metric = error_metric * (len(test_data_loader.dataset) / test_data_loader.batch_size)
-        #scaled_kl = model.kl_divergence() / test_data_loader.batch_size
+        pll = partial_ll_loss(output.reshape(-1).cpu(), tb.reshape(-1).cpu(), e.reshape(-1).cpu())
+        # scaled_error_metric = error_metric * (len(test_data_loader.dataset) / test_data_loader.batch_size)
+        # scaled_kl = model.kl_divergence() / test_data_loader.batch_size
 
         # ELBO loss
-        #loss = error_metric + scaled_kl
+        # loss = error_metric + scaled_kl
         conc_metric = concordance_index_censored(e.detach().cpu().numpy().astype(bool).reshape(-1),
-                                                     tb.detach().cpu().numpy().reshape(-1),
-                                                     output.reshape(-1).detach().cpu().numpy())[0]
-        return conc_metric,pll.item()
-
-
+                                                 tb.detach().cpu().numpy().reshape(-1),
+                                                 output.reshape(-1).detach().cpu().numpy())[0]
+        return conc_metric, pll.item()
 
 
 # train the model and save some visualisations on the way
@@ -232,7 +250,7 @@ def validate(args, cpath_val_loader, model, tb_writer=None):
                 output_.append(output)
             output = torch.mean(torch.stack(output_), dim=0)
             error_metric = partial_ll_loss(output.reshape(-1).cpu(), tb.reshape(-1).cpu(), e.reshape(-1).cpu())
-            scaled_error_metric = error_metric * (len(cpath_val_loader.dataset) /cpath_val_loader.batch_size)
+            scaled_error_metric = error_metric * (len(cpath_val_loader.dataset) / cpath_val_loader.batch_size)
             scaled_kl = model.kl_divergence() / cpath_val_loader.batch_size
 
             # ELBO loss
@@ -269,76 +287,27 @@ def validate(args, cpath_val_loader, model, tb_writer=None):
 
     print(' * Error {error.avg:.3f}'.format(error=errors))
 
-    return losses.sum,c_indexs.avg,errors.sum
+    return losses.sum, c_indexs.avg, errors.sum
 
 
 def main():
     global best_loss_val_score
 
-    pathway_mask = pd.read_csv("../data/pathway_mask.csv", index_col=0).values
-    pathway_mask = torch.from_numpy(pathway_mask).type(torch.FloatTensor)
-    if args.cuda:
-        pathway_mask=pathway_mask.to(device = 'cuda')
-
-    train_data = pd.read_csv("../data/train.csv")
-    X_train_np = train_data.drop(["SAMPLE_ID", "OS_MONTHS", "OS_EVENT", "AGE"], axis=1).values
-    tb_train = train_data.loc[:, ["OS_MONTHS"]].values
-    e_train = train_data.loc[:, ["OS_EVENT"]].values
-    clinical_vars_train = train_data.loc[:, ["AGE"]].values
-
-    val_data = pd.read_csv("../data/validation.csv")
-    X_val_np = val_data.drop(["SAMPLE_ID", "OS_MONTHS", "OS_EVENT", "AGE"], axis=1).values
-    tb_val = val_data.loc[:, ["OS_MONTHS"]].values
-    e_val = val_data.loc[:, ["OS_EVENT"]].values
-    clinical_vars_val = val_data.loc[:, ["AGE"]].values
-
-    test_data = pd.read_csv("../data/test.csv")
-    X_test_np = test_data.drop(["SAMPLE_ID", "OS_MONTHS", "OS_EVENT", "AGE"], axis=1).values
-    tb_test = test_data.loc[:, ["OS_MONTHS"]].values
-    e_test = test_data.loc[:, ["OS_EVENT"]].values
-    clinical_vars_test = test_data.loc[:, ["AGE"]].values
-
-    cpath_train_dataset = cpath_dataset(X_train_np,
-                                        clinical_vars_train,
-                                        tb_train,
-                                        e_train)
-
-    cpath_val_dataset = cpath_dataset(X_val_np,
-                                      clinical_vars_val,
-                                      tb_val,
-                                      e_val)
-    cpath_test_dataset = cpath_dataset(X_test_np,
-                                      clinical_vars_test,
-                                      tb_test,
-                                      e_test)
-
     # import data
-    cpath_train_loader = torch.utils.data.DataLoader(cpath_train_dataset,
-                                                     batch_size=len(cpath_train_dataset),
-                                                     shuffle=True,
-                                                     num_workers=0)
-
-    cpath_val_loader = torch.utils.data.DataLoader(cpath_val_dataset,
-                                                   batch_size=len(cpath_val_dataset),
-                                                   shuffle=False,
-                                                   num_workers=0)
-    cpath_test_loader = torch.utils.data.DataLoader(cpath_test_dataset,
-                                                   batch_size=len(cpath_test_dataset),
-                                                   shuffle=False,
-                                                   num_workers=0)
+    cpath_train_loader,cpath_test_loader,cpath_val_loader,pathway_mask = load_cpath_data(args.cuda)
 
 
     # init model
-    model = cpath_md_lg(5567,860, 100, 30,args,mask = pathway_mask)
+    model = hs_cpath(5567, 860, 100, 30, args, mask=pathway_mask)
     if args.cuda:
         model.cuda()
         # init optimizer
-    optimizer = optim.Adam(model.parameters(),lr=args.lr)
+    optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
     for epoch in range(1, args.epochs + 1):
-        loss_train_score, c_index_train_score,pll_train = train(args, model, cpath_train_loader, epoch, optimizer)
-        loss_val_score,c_index_val_score,pll_val = validate(args, cpath_val_loader, model, epoch)
-        test_conc_metric,test_pll = test(args, model, cpath_test_loader)
+        loss_train_score, c_index_train_score, pll_train = train(args, model, cpath_train_loader, epoch, optimizer)
+        loss_val_score, c_index_val_score, pll_val = validate(args, cpath_val_loader, model, epoch)
+        test_conc_metric, test_pll = test(args, model, cpath_test_loader)
 
         epoch_dict = {
 
@@ -359,43 +328,44 @@ def main():
         is_best = loss_val_score < best_loss_val_score
         best_loss_val_score = min(loss_val_score, best_loss_val_score)
         if args.save_best_model & is_best:
-                save_checkpoint(
-                    epoch_dict,
-                    is_best,
-                    filename=os.path.join(
-                        args.save_dir,
-                        'bayesian_{}.pth'.format(args.arch)))
+            save_checkpoint(
+                epoch_dict,
+                is_best,
+                filename=os.path.join(
+                    args.save_dir,
+                    'bayesian_{}.pth'.format(args.arch)))
 
         epoch_dict.pop("state_dict", None)
         epoch_log = {k: [v] for k, v in epoch_dict.items()}
         epoch_log_df = pd.DataFrame.from_dict(epoch_log, orient="columns")
         log_file_name = args.arch + '_logs.csv'
         log_path = os.path.join(args.log_dir, log_file_name)
-        epoch_log_df.to_csv(log_path, mode='a', header=not os.path.exists(log_path),index = False)
+        epoch_log_df.to_csv(log_path, mode='a', header=not os.path.exists(log_path), index=False)
 
     return epoch_log_df.to_string(header=False, index=False)
 
 
-
-
 if __name__ == '__main__':
     import argparse
+
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=9)
-    parser.add_argument('--num-mc',dest = "num_mc", type=int, default=200)
+    parser.add_argument('--epochs', type=int, default=10)
+    parser.add_argument('--num-mc', dest="num_mc", type=int, default=200)
     parser.add_argument('--print_freq', type=int, default=1)
-    parser.add_argument('--lr', type=float, default=0.01)
+    parser.add_argument('--lr', type=float, default=0.1)
     parser.add_argument('--gp-mean', dest="gp_mean", type=float, default=0)
     parser.add_argument('--gp-var', dest="gp_var", type=float, default=0.01)
-    parser.add_argument('--save-best-model', dest = "save_best_model",choices=('True','False'), default='False')
-    parser.add_argument('--save-dir',dest="save_dir", type=str, default='/Users/alexandermollers/Documents/GitHub/survival_analysis/run_pipeline/model_checkpoints')
-    parser.add_argument('--arch',default='cpath_model')
-    parser.add_argument('--log-dir',dest = "log_dir", default='/Users/alexandermollers/Documents/GitHub/survival_analysis/run_pipeline/model_checkpoints')
+    parser.add_argument('--save-best-model', dest="save_best_model", choices=('True', 'False'), default='False')
+    parser.add_argument('--save-dir', dest="save_dir", type=str,
+                        default='/Users/alexandermollers/Documents/GitHub/survival_analysis/run_pipeline/model_checkpoints')
+    parser.add_argument('--arch', default='hs_cp_model')
+    parser.add_argument('--log-dir', dest="log_dir",
+                        default='/Users/alexandermollers/Documents/GitHub/survival_analysis/run_pipeline/model_checkpoints')
 
     args = parser.parse_args()
     model_bool = args.save_best_model == 'True'
     args.save_best_model = model_bool
-    args.cuda = torch.cuda.is_available() # check if we can put the net on the GPU
+    args.cuda = torch.cuda.is_available()  # check if we can put the net on the GPU
     best_loss_val_score = 0
     main()
 

@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from torch.distributions import HalfCauchy
-from dist_var_layers import ReparametrizedGaussian, ScaleMixtureGaussian, InverseGamma
+from src.models.variational_layers.dist_var_layers import ReparametrizedGaussian, ScaleMixtureGaussian, InverseGamma
 import numpy as np
 from scipy.special import loggamma
 
@@ -41,23 +41,40 @@ class BaseVariationalLayer_(nn.Module):
                                                               (sigma_p ** 2)) - 0.5
         return kl.mean()
 
+class Horseshoe_params:
+        def __init__(self):
+            self.horseshoe_scale = None
+            self.global_cauchy_scale= 1.
+            self.weight_cauchy_scale= 1.
+            self.beta_rho_scale= -5.
+            self.log_tau_mean = None
+            self.log_tau_rho_scale= -5.
+            self.bias_rho_scale= -5.
+            self.log_v_mean=None
+            self.log_v_rho_scale= -5.
 
-class HorseshoeLayer(nn.Module):
+
+class HorseshoeLayer_out_mask(nn.Module):
     """
     Single linear layer of a horseshoe prior for regression
     """
-    def __init__(self, in_features, out_features, parameters, device):
+    def __init__(self, in_features, out_features, parameters, cuda=False,mask=None):
         """
         Args:
             in_features: int, number of input features
             out_features: int, number of output features
             parameters: instance of class HorseshoeHyperparameters
-            device: cuda device instance
+            cuda: boolean
         """
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
-        self.device = device
+
+        if mask == None:
+            self.mask = torch.ones(out_features,in_features)
+        else:
+            self.mask = mask
+        self.cuda = cuda
 
         # Scale to initialize weights, according to Yingzhen's work
         if parameters.horseshoe_scale == None:
@@ -80,13 +97,13 @@ class HorseshoeLayer(nn.Module):
 
         # Initialization of parameters of variational distribution
         # weight parameters
-        self.beta_mean = nn.Parameter(torch.Tensor(out_features, in_features).uniform_(-scale, scale))
-        self.beta_rho = nn.Parameter(torch.ones([out_features, in_features]) * parameters.beta_rho_scale)
-        self.beta = ReparametrizedGaussian(self.beta_mean, self.beta_rho)
+        self.beta_mean = nn.Parameter(torch.Tensor(out_features, in_features).uniform_(-scale, scale) * self.mask)
+        self.beta_rho = nn.Parameter(torch.ones([out_features, in_features]) * parameters.beta_rho_scale * self.mask)
+        self.beta = ReparametrizedGaussian(self.beta_mean, self.beta_rho,self.mask)
 
         # local shrinkage parameters
-        self.lambda_shape = self.prior_lambda_shape * torch.ones(in_features)
-        self.lambda_rate = self.prior_lambda_rate * torch.ones(in_features)
+        self.lambda_shape = self.prior_lambda_shape * torch.ones(out_features)
+        self.lambda_rate = self.prior_lambda_rate * torch.ones(out_features)
         self.lambda_ = InverseGamma(self.lambda_shape, self.lambda_rate)
 
         # Sample from half-Cauchy to initialize the mean of log_tau
@@ -94,12 +111,12 @@ class HorseshoeLayer(nn.Module):
         # is the prior distribution over tau
         if parameters.log_tau_mean == None:
             distr = HalfCauchy(1 / np.sqrt(self.prior_lambda_rate))
-            sample = distr.sample(torch.Size([in_features])).squeeze()
+            sample = distr.sample(torch.Size([out_features])).squeeze()
             self.log_tau_mean = nn.Parameter(torch.log(sample))
         else:
             self.log_tau_mean = parameters.log_tau_mean
 
-        self.log_tau_rho = nn.Parameter(torch.ones(in_features) * parameters.log_tau_rho_scale)
+        self.log_tau_rho = nn.Parameter(torch.ones(out_features) * parameters.log_tau_rho_scale)
         self.log_tau = ReparametrizedGaussian(self.log_tau_mean, self.log_tau_rho)
 
         # bias parameters
@@ -153,7 +170,7 @@ class HorseshoeLayer(nn.Module):
             # and therefore one expected value for each of these shrinkage parameters.
             return torch.sum(exp_log)
 
-        def exp_log_gaussian(mean, std):
+        def exp_log_gaussian(mean, std, dim = False):
             """
             Calculates the expectation of the log of a Gaussian distribution p under the posterior distribution q
             E_q[log p(x)] - see note log_prior_gaussian.pdf
@@ -169,7 +186,8 @@ class HorseshoeLayer(nn.Module):
             beta vector, and a standard deviation vector of the same length. By summing over the
             mean vector and over the standard deviations, we therefore sum over all components of beta.
             """
-            dim = mean.shape[0] * mean.shape[1]
+            if dim==False:
+                dim = mean.shape[0] * mean.shape[1]
             exp_gaus = - 0.5 * dim * (torch.log(torch.tensor(2 * math.pi))) - 0.5 * (torch.sum(mean **2) + torch.sum(std**2))
             return exp_gaus
 
@@ -208,7 +226,7 @@ class HorseshoeLayer(nn.Module):
         log_inv_gammas = log_inv_gammas_weight + log_inv_gammas_global
 
         # E_q[N(beta)]
-        log_gaussian = exp_log_gaussian(self.beta.mean, self.beta.std_dev)\
+        log_gaussian = exp_log_gaussian(self.beta.mean, self.beta.std_dev,dim=self.beta.std_dev.count_nonzero().item())\
                        + exp_log_gaussian(self.bias.mean, self.bias.std_dev)
 
         return log_gaussian + log_inv_gammas
@@ -222,7 +240,18 @@ class HorseshoeLayer(nn.Module):
         Tau and v follow log-Normal distributions. The entropy of a log normal
         is the entropy of the normal distribution + the mean.
         """
-        entropy = self.beta.entropy()\
+
+        # calulate beta entropy (entropy for multivariate gaussian)
+        #nonzero_idx = self.beta_rho != 0
+        #b_rho_log = self.beta_rho.clone()
+        #b_rho_log[nonzero_idx] = torch.log(b_rho_log[nonzero_idx])
+
+        #entropy_part1 = (self.in_features * self.out_features) / 2 * (torch.log(torch.tensor([2 * math.pi])) + 1)
+        entropy_part1 = (self.mask.count_nonzero().item()) / 2 * (torch.log(torch.tensor([2 * math.pi])) + 1)
+        entropy_part2 = torch.sum(self.mask * torch.log(torch.log1p(torch.exp(self.beta_rho))))
+        beta_entropy = entropy_part1 + entropy_part2
+
+        entropy = beta_entropy\
                 + self.log_tau.entropy() + torch.sum(self.log_tau.mean)\
                 + self.lambda_.entropy() + self.bias.entropy()\
                 + self.log_v.entropy() + torch.sum(self.log_v.mean)\
@@ -250,16 +279,17 @@ class HorseshoeLayer(nn.Module):
             n_samples: int, number of samples to draw from the weight and bias distribution
         """
         beta = self.beta.sample(n_samples)
-        log_tau = torch.unsqueeze(self.log_tau.sample(n_samples), 1)
+        log_tau = torch.unsqueeze(self.log_tau.sample(n_samples), 2)
         log_v = torch.unsqueeze(self.log_v.sample(n_samples), 1)
+        mask = torch.unsqueeze(self.mask, 0)
 
-        weight = beta * log_tau * log_v
+        weight = mask * beta * log_tau * log_v
 
         bias = self.bias.sample(n_samples)
 
         input_ = input_.expand(n_samples, -1, -1)
 
-        if self.device.type == 'cuda':
+        if self.cuda:
             input_ = input_.cuda()
             weight = weight.cuda()
             bias = bias.cuda()
