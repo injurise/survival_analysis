@@ -191,8 +191,9 @@ class InverseGamma(Distribution):
         """
         Calculates the entropy of the inverse gamma distribution
         """
-        entropy =  self.shape + torch.log(self.rate) + torch.lgamma(self.shape) \
-                     - (1 + self.shape) * torch.digamma(self.shape)
+        part1 = self.shape + torch.log(self.rate) + torch.lgamma(self.shape)
+        part2 = (1 + self.shape) * torch.digamma(self.shape)
+        entropy =   part1 - part2
         return torch.sum(entropy)
 
     def logprob(self, target):
