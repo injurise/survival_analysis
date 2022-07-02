@@ -102,8 +102,15 @@ class HorseshoeLayer_out_mask(nn.Module):
 
         if self.cuda:
             self.mask = self.mask.cuda()
+            self.prior_tau_shape = self.prior_tau_shape.cuda()
+            self.prior_lambda_shape = self.prior_lambda_shape.cuda()
+            self.prior_lambda_rate = self.prior_lambda_rate.cuda()
+            self.prior_v_shape = self.prior_v_shape.cuda()
+            self.prior_theta_shape = self.prior_theta_shape.cuda()
+            self.prior_theta_rate = self.prior_theta_rate.cuda()
             beta_mean_init = beta_mean_init.cuda()
             beta_rho_init = beta_rho_init.cuda()
+
 
         self.beta_mean = nn.Parameter(beta_mean_init * self.mask)
         self.beta_rho = nn.Parameter(beta_rho_init * self.mask)
@@ -250,7 +257,7 @@ class HorseshoeLayer_out_mask(nn.Module):
         """
 
         # calulate beta entropy (entropy for multivariate gaussian)
-       
+
 
         entropy = self.beta.entropy()\
                 + self.log_tau.entropy() + torch.sum(self.log_tau.mean)\
