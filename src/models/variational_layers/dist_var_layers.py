@@ -227,6 +227,11 @@ class InverseGamma(Distribution):
         self.shape = shape
         self.rate = rate
 
+        if self.cuda:
+            self.shape = self.shape.cuda()
+            self.rate = self.rate.cuda()
+
+
 class PredictiveDistribution:
     def __init__(self, distributions):
         """
