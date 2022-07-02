@@ -162,7 +162,7 @@ class Gamma(Distribution):
 
 class InverseGamma(Distribution):
     """ Inverse Gamma distribution """
-    def __init__(self, shape, rate):
+    def __init__(self, shape, rate,cuda = False):
         """
         Class constructor, sets parameters of the distribution.
         Args:
@@ -171,6 +171,9 @@ class InverseGamma(Distribution):
         """
         self.shape = shape
         self.rate = rate
+        if cuda:
+            self.shape = self.shape.cuda()
+            self.rate = self.rate.cuda()
 
     def exp_inverse(self):
         """

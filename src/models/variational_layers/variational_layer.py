@@ -120,7 +120,7 @@ class HorseshoeLayer_out_mask(nn.Module):
         # local shrinkage parameters
         self.lambda_shape = self.prior_lambda_shape * out_features_ones
         self.lambda_rate = self.prior_lambda_rate * out_features_ones
-        self.lambda_ = InverseGamma(self.lambda_shape, self.lambda_rate)
+        self.lambda_ = InverseGamma(self.lambda_shape, self.lambda_rate,cuda = self.cuda)
 
         # Sample from half-Cauchy to initialize the mean of log_tau
         # We initialize the parameters using a half-Cauchy because this
@@ -145,7 +145,7 @@ class HorseshoeLayer_out_mask(nn.Module):
         # global shrinkage parameters
         self.theta_shape = self.prior_theta_shape
         self.theta_rate = self.prior_theta_rate
-        self.theta = InverseGamma(self.theta_shape, self.theta_rate)
+        self.theta = InverseGamma(self.theta_shape, self.theta_rate,cuda = self.cuda)
 
         # Sample from half-Cauchy to initialize the mean of log_v
         # We initialize the parameters using a half-Cauchy because this
