@@ -224,7 +224,7 @@ class HorseshoeLayer_out_mask(nn.Module):
         # E_q[ln p(\lambda)] for the weights
         shape = self.prior_lambda_shape
         rate = self.prior_lambda_rate
-        log_inv_gammas_weight += exp_log_inverse_gamma(shape, rate, np.log(rate),
+        log_inv_gammas_weight += exp_log_inverse_gamma(shape, rate, torch.log(rate),
                                                        exp_log_lambda, exp_lambda_inverse)
 
         # E_q[ln p(v | \theta)] for the global shrinkage parameter
@@ -239,7 +239,7 @@ class HorseshoeLayer_out_mask(nn.Module):
         # E_q[ln p(\theta)] for the global shrinkage parameter
         shape = self.prior_theta_shape
         rate = self.prior_theta_rate
-        log_inv_gammas_global += exp_log_inverse_gamma(shape, rate, np.log(rate),
+        log_inv_gammas_global += exp_log_inverse_gamma(shape, rate, torch.log(rate),
                                                        exp_log_theta, exp_theta_inverse)
 
         # Add all expectations
