@@ -70,6 +70,7 @@ class HorseshoeLayer_out_mask(nn.Module):
         self.in_features = in_features
         self.out_features = out_features
         self.cuda = cuda
+        out_features_ones = torch.ones(out_features)
 
         if mask == None:
             self.mask = torch.ones(out_features,in_features)
@@ -103,22 +104,22 @@ class HorseshoeLayer_out_mask(nn.Module):
         if self.cuda:
             self.mask = self.mask.cuda()
             self.prior_tau_shape = self.prior_tau_shape.cuda()
-            self.prior_lambda_shape = self.prior_lambda_shape.cuda()
-            self.prior_lambda_rate = self.prior_lambda_rate.cuda()
             self.prior_v_shape = self.prior_v_shape.cuda()
             self.prior_theta_shape = self.prior_theta_shape.cuda()
             self.prior_theta_rate = self.prior_theta_rate.cuda()
+            self.prior_lambda_shape = self.prior_lambda_shape.cuda()
+            self.prior_lambda_rate = self.prior_lambda_rate.cuda()
             beta_mean_init = beta_mean_init.cuda()
             beta_rho_init = beta_rho_init.cuda()
-
+            out_features_ones = out_features_ones.cuda()
 
         self.beta_mean = nn.Parameter(beta_mean_init * self.mask)
         self.beta_rho = nn.Parameter(beta_rho_init * self.mask)
         self.beta = ReparametrizedGaussian(self.beta_mean, self.beta_rho,self.mask)
 
         # local shrinkage parameters
-        self.lambda_shape = self.prior_lambda_shape * torch.ones(out_features)
-        self.lambda_rate = self.prior_lambda_rate * torch.ones(out_features)
+        self.lambda_shape = self.prior_lambda_shape * out_features_ones
+        self.lambda_rate = self.prior_lambda_rate * out_features_ones
         self.lambda_ = InverseGamma(self.lambda_shape, self.lambda_rate)
 
         # Sample from half-Cauchy to initialize the mean of log_tau
@@ -130,8 +131,10 @@ class HorseshoeLayer_out_mask(nn.Module):
             self.log_tau_mean = nn.Parameter(torch.log(sample))
         else:
             self.log_tau_mean = parameters.log_tau_mean
+            if self.cuda:
+                self.log_tau_mean = self.log_tau_mean.cuda()
 
-        self.log_tau_rho = nn.Parameter(torch.ones(out_features) * parameters.log_tau_rho_scale)
+        self.log_tau_rho = nn.Parameter(out_features_ones * parameters.log_tau_rho_scale)
         self.log_tau = ReparametrizedGaussian(self.log_tau_mean, self.log_tau_rho)
 
         # bias parameters
@@ -153,6 +156,8 @@ class HorseshoeLayer_out_mask(nn.Module):
             self.log_v_mean = nn.Parameter(torch.log(sample))
         else:
             self.log_v_mean = parameters.log_v_mean
+            if self.cuda:
+                self.log_v_mean = self.log_v_mean.cuda()
 
         self.log_v_rho = nn.Parameter(torch.ones([1, 1])  * parameters.log_v_rho_scale)
         self.log_v = ReparametrizedGaussian(self.log_v_mean, self.log_v_rho)
