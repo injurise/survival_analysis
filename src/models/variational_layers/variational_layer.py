@@ -126,7 +126,7 @@ class HorseshoeLayer_out_mask(nn.Module):
         # We initialize the parameters using a half-Cauchy because this
         # is the prior distribution over tau
         if parameters.log_tau_mean == None:
-            distr = HalfCauchy(1 / np.sqrt(self.prior_lambda_rate))
+            distr = HalfCauchy(1 / np.sqrt(self.prior_lambda_rate.cpu()))
             sample = distr.sample(torch.Size([out_features])).squeeze()
             self.log_tau_mean = nn.Parameter(torch.log(sample))
         else:
@@ -151,7 +151,7 @@ class HorseshoeLayer_out_mask(nn.Module):
         # We initialize the parameters using a half-Cauchy because this
         # is the prior distribution ovev
         if parameters.log_v_mean == None:
-            distr = HalfCauchy(1 / np.sqrt(self.prior_theta_rate))
+            distr = HalfCauchy(1 / np.sqrt(self.prior_theta_rate.cpu()))
             sample = distr.sample()
             self.log_v_mean = nn.Parameter(torch.log(sample))
         else:
