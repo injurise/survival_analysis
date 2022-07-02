@@ -258,6 +258,7 @@ class HorseshoeLayer_out_mask(nn.Module):
         entropy_part1 = (self.mask.count_nonzero().item()) / 2 * (torch.log(torch.tensor([2 * math.pi])) + 1)
         entropy_part2 = torch.sum(self.mask * torch.log(torch.log1p(torch.exp(self.beta_rho))))
         beta_entropy = entropy_part1 + entropy_part2
+        b_e = self.beta.entropy()
 
         entropy = beta_entropy\
                 + self.log_tau.entropy() + torch.sum(self.log_tau.mean)\

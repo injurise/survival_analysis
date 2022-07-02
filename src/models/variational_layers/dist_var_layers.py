@@ -53,17 +53,19 @@ class ReparametrizedGaussian(Distribution):
         Computes the entropy of the Diagonal Gaussian distribution.
         Details on the computation can be found in the 'diagonal_gaussian_entropy' notes in the repo
         """
-        if self.mean.dim() > 1:
-            n_inputs, n_outputs = self.mean.shape
-        else:
-            n_inputs = len(self.mean)
-            n_outputs = 1
+
+        #entropy_part1 = (self.mask.count_nonzero().item()) / 2 * (torch.log(torch.tensor([2 * math.pi])) + 1)
+        #entropy_part2 = torch.sum(self.mask * torch.log(torch.log1p(torch.exp(self.beta_rho))))
+        #beta_entropy = entropy_part1 + entropy_part2
+
         # part 1 should be adjusted to nonzero entries instead of (n_inputs * n_outputs) otherwise doesnt work with mask
-        part1 = (n_inputs * n_outputs) / 2 * (torch.log(torch.tensor([2 * math.pi])) + 1)
+        part1 = (self.mask.count_nonzero().item()) / 2 * (torch.log(torch.tensor([2 * math.pi])) + 1)
         nonzero_index = self.std_dev!=0
-        part2 = self.std_dev
-        part2[nonzero_index] = torch.log(self.std_dev[nonzero_index])
-        part2 = torch.sum(part2)
+        part2 = self.std_dev #  the multiplication with the mask is happening in the standard deviation function
+        part2[nonzero_index] = torch.log(self.std_dev[nonzero_index]) #  the multiplication with the mask is ha
+        part2 = torch.sum( part2)
+        if part2.is_cuda:
+            part1 = part1.cuda()
 
         return part1 + part2
 
