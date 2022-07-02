@@ -171,7 +171,8 @@ class InverseGamma(Distribution):
         """
         self.shape = shape
         self.rate = rate
-        if cuda:
+        self.cuda = cuda
+        if self.cuda:
             self.shape = self.shape.cuda()
             self.rate = self.rate.cuda()
 
@@ -194,9 +195,12 @@ class InverseGamma(Distribution):
         """
         Calculates the entropy of the inverse gamma distribution
         """
-        part1 = self.shape + torch.log(self.rate) + torch.lgamma(self.shape)
-        part2 = (1 + self.shape) * torch.digamma(self.shape)
-        entropy =   part1 - part2
+        if self.cuda:
+            entropy = self.shape.cuda() + torch.log(self.rate).cuda() + torch.lgamma(self.shape).cuda() - \
+                      (1 + self.shape.cuda()) * torch.digamma(self.shape).cuda()
+        else:
+            entropy = self.shape + torch.log(self.rate) + torch.lgamma(self.shape) - \
+                      (1 + self.shape) * torch.digamma(self.shape)
         return torch.sum(entropy)
 
     def logprob(self, target):
