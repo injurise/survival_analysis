@@ -8,10 +8,10 @@ def sub_command(cmd,identifier, hours=4):
                f'-oo logs/gs_hs_cpath/hs_logs/{identifier}.log -J {identifier} -eo logs/gs_hs_cpath/err_logs/{identifier}.err "{setup_cmd}; {cmd}"')
     os.system(sub_cmd)
 
-learning_rates = [0.001,0.01,0.1,0.2]
-gaussianprior_variances = [0.01,0.05,0.1,0.2,0.5]
-global_cauchy_scale = [0.1,0.5,1,1.5,2]
-weight_cauchy_scale = [0.1,0.5,1,1.5,2]
+learning_rates = [0.1]
+gaussianprior_variances = [0.01]
+global_cauchy_scale = [0.1,1.,2.]
+weight_cauchy_scale = [1.,1.5,2.]
 epochs = [70]
 num_mcs = [300]
 
