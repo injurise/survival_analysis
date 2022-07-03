@@ -4,7 +4,7 @@ def sub_command(cmd,identifier, hours=4):
    # add_path = 'export PATH="/cluster/home/amollers/software/anaconda/bin:${PATH}"'
     setup_cmd = 'source activate /cluster/home/amollers/software/anaconda/envs/base_env'
     # TODO: adjust this to needs with -n {cpus} and mem as param
-    sub_cmd = (f'bsub -W {hours}:00 -n 6 -R "rusage[mem=20000,ngpus_excl_p=1]" '
+    sub_cmd = (f'bsub -W {hours}:00 -n 6 -R "rusage[mem=80000,ngpus_excl_p=1]" '
                f'-oo logs/gs_hs_cpath/hs_logs/{identifier}.log -J {identifier} -eo logs/gs_hs_cpath/err_logs/{identifier}.err "{setup_cmd}; {cmd}"')
     os.system(sub_cmd)
 
