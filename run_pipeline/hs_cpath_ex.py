@@ -41,7 +41,7 @@ class hs_cpath(nn.Module):
         # activation
         self.tanh = nn.Tanh()
         # layers
-        self.fc1 = HorseshoeLayer_out_mask(In_Nodes, Pathway_Nodes, hs_parameters, mask=mask)
+        self.fc1 = HorseshoeLayer_out_mask(In_Nodes, Pathway_Nodes, hs_parameters,cuda = args.cuda, mask=mask)
 
         self.fc2 = LinearReparam(in_features=Pathway_Nodes,
                                 out_features=Hidden_Nodes,
