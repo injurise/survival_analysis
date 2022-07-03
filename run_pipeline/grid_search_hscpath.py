@@ -5,7 +5,7 @@ def sub_command(cmd,identifier, hours=4):
     setup_cmd = 'source activate /cluster/home/amollers/software/anaconda/envs/base_env'
     # TODO: adjust this to needs with -n {cpus} and mem as param
     sub_cmd = (f'bsub -W {hours}:00 -n 6 -R "rusage[mem=20000,ngpus_excl_p=1]" '
-               f'-oo logs/{identifier}.log -J {identifier} -eo err_logs/{identifier}.err "{setup_cmd}; {cmd}"')
+               f'-oo logs/gs_hs_cpath/hs_logs/{identifier}.log -J {identifier} -eo logs/gs_hs_cpath/err_logs/{identifier}.err "{setup_cmd}; {cmd}"')
     os.system(sub_cmd)
 
 learning_rates = [0.001,0.01,0.1,0.2]
@@ -25,8 +25,8 @@ for learning_rate in learning_rates:
 
                         cmd =(f'/cluster/home/amollers/software/anaconda/envs/base_env/bin/python hs_cpath_ex.py --epochs {epoch} '
                               f'--num-mc {num_mc} --lr {learning_rate} --gp-var {gp_var} --hs-glob {ghs_scale} --hs-group {whs_scale}'
-                              f'--save-dir "/cluster/home/amollers/Github/survival_analysis/run_pipeline/model_checkpoints" '
+                              f'--save-dir "/cluster/home/amollers/Github/survival_analysis/run_pipeline/logs/gs_hs_cpath/model_checkpoints" '
                               f'--arch "cpath_hs_model_{learning_rate}_{gp_var}_{ghs_scale}_{whs_scale}" '
-                              f'--log-dir "/cluster/home/amollers/Github/survival_analysis/run_pipeline/logs"')
-        
-                        sub_command(cmd,f'"cpath_model_{learning_rate}_{gp_var}"',hours=4)
+                              f'--log-dir "/cluster/home/amollers/Github/survival_analysis/run_pipeline/logs/gs_hs_cpath/hs_output"')
+
+                        sub_command(cmd,f'"cpathhs_model_{learning_rate}_{gp_var}_{ghs_scale}_{whs_scale}"',hours=4)
