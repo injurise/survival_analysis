@@ -24,9 +24,9 @@ for learning_rate in learning_rates:
                     for num_mc in num_mcs:
 
                         cmd =(f'/cluster/home/amollers/software/anaconda/envs/base_env/bin/python hs_cpath_ex.py --epochs {epoch} '
-                              f'--num-mc {num_mc} --lr {learning_rate} --gp-var {gp_var} --hs-glob {ghs_scale} --hs-group {whs_scale}'
+                              f'--num-mc {num_mc} --lr {learning_rate} --gp-var {gp_var} --hs-glob {ghs_scale} --hs-group {whs_scale} '
                               f'--save-dir "/cluster/home/amollers/Github/survival_analysis/run_pipeline/logs/gs_hs_cpath/model_checkpoints" '
                               f'--arch "cpath_hs_model_{learning_rate}_{gp_var}_{ghs_scale}_{whs_scale}" '
-                              f'--log-dir "/cluster/home/amollers/Github/survival_analysis/run_pipeline/logs/gs_hs_cpath/hs_output"')
+                              f'--log-dir "/cluster/home/amollers/Github/survival_analysis/run_pipeline/logs/gs_hs_cpath/hs_output" ')
 
                         sub_command(cmd,f'"cpathhs_model_{learning_rate}_{gp_var}_{ghs_scale}_{whs_scale}"',hours=4)
