@@ -23,10 +23,10 @@ import time
 ############# Model Definition ##################
 
 class Horseshoe_params:
-    def __init__(self):
+    def __init__(self,global_cauchy_scale = 1,weight_cauchy_scale = 1):
         self.horseshoe_scale = None
-        self.global_cauchy_scale = 1.
-        self.weight_cauchy_scale = 1
+        self.global_cauchy_scale = global_cauchy_scale
+        self.weight_cauchy_scale = weight_cauchy_scale
         self.beta_rho_scale = -5.
         self.log_tau_mean = None
         self.log_tau_rho_scale = -5.
@@ -34,11 +34,9 @@ class Horseshoe_params:
         self.log_v_mean = None
         self.log_v_rho_scale = -5.
 
-hs_parameters = Horseshoe_params()
-
 
 class hs_cpath(nn.Module):
-    def __init__(self, In_Nodes, Pathway_Nodes, Hidden_Nodes,Last_layer_Nodes, args,mask):
+    def __init__(self, In_Nodes, Pathway_Nodes, Hidden_Nodes,Last_layer_Nodes, args,hs_parameters,mask):
         super(hs_cpath, self).__init__()
         # activation
         self.tanh = nn.Tanh()
@@ -293,22 +291,26 @@ def validate(args, cpath_val_loader, model, tb_writer=None):
 def main():
     global best_loss_val_score
 
+    hs_parameters = Horseshoe_params(global_cauchy_scale=args.global_cauchy_scale,
+                                     weight_cauchy_scale=args.weight_cauchy_scale)
+
     # import data
     cpath_train_loader,cpath_test_loader,cpath_val_loader,pathway_mask = load_cpath_data(args.cuda)
 
 
     # init model
-    model = hs_cpath(5567, 860, 100, 30, args, mask=pathway_mask)
+    model = hs_cpath(5567, 860, 100, 30, args,hs_parameters = hs_parameters, mask=pathway_mask)
     if args.cuda:
         model.cuda()
         # init optimizer
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
 
     for epoch in range(1, args.epochs + 1):
         loss_train_score, c_index_train_score, pll_train = train(args, model, cpath_train_loader, epoch, optimizer)
         loss_val_score, c_index_val_score, pll_val = validate(args, cpath_val_loader, model, epoch)
         test_conc_metric, test_pll = test(args, model, cpath_test_loader)
-
+        scheduler.step()
         epoch_dict = {
 
             'epoch': epoch + 1,
@@ -355,6 +357,8 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=0.1)
     parser.add_argument('--gp-mean', dest="gp_mean", type=float, default=0)
     parser.add_argument('--gp-var', dest="gp_var", type=float, default=0.01)
+    parser.add_argument('--hs-glob', dest="global_cauchy_scale", type=float, default=1.)
+    parser.add_argument('--hs-group', dest="weight_cauchy_scale", type=float, default=1.)
     parser.add_argument('--save-best-model', dest="save_best_model", choices=('True', 'False'), default='False')
     parser.add_argument('--save-dir', dest="save_dir", type=str,
                         default='/Users/alexandermollers/Documents/GitHub/survival_analysis/run_pipeline/model_checkpoints')
